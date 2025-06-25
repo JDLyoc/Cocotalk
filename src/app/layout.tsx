@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/toaster"
 import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = {
-  title: 'CocoTalk',
+  title: 'Assistant IA',
   description: 'Your intelligent chat assistant',
 };
 

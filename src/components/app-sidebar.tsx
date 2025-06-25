@@ -32,18 +32,15 @@ export function AppSidebar({
           <Image
             src={logo}
             alt="App logo"
-            width={32}
-            height={32}
+            width={48}
+            height={48}
             className="rounded-md object-contain"
           />
         ) : (
-          <div className="bg-accent p-2 rounded-lg">
-            <Bot className="h-6 w-6 text-accent-foreground" />
+          <div className="bg-accent p-3 rounded-lg">
+            <Bot className="h-8 w-8 text-accent-foreground" />
           </div>
         )}
-        <h1 className="text-2xl font-bold text-primary font-headline tracking-tight">
-          CocoTalk
-        </h1>
       </div>
 
       <Button variant="outline" className="mb-4" onClick={createNewChat}>

@@ -32,8 +32,8 @@ export default function Home() {
         {
           id: "1",
           role: "assistant",
-          content: "Bonjour! Je suis CocoTalk. Comment puis-je vous aider aujourd'hui?",
-          text_content: "Bonjour! Je suis CocoTalk. Comment puis-je vous aider aujourd'hui?"
+          content: "Bonjour! Je suis votre assistant. Comment puis-je vous aider aujourd'hui?",
+          text_content: "Bonjour! Je suis votre assistant. Comment puis-je vous aider aujourd'hui?"
         },
       ],
     },

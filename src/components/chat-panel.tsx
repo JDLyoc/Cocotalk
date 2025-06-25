@@ -77,7 +77,7 @@ export function ChatPanel({ messages, onSendMessage, isLoading, title }: ChatPan
             <ChatMessage key={msg.id} {...msg} />
           ))}
           {isLoading && (
-             <ChatMessage id="loading" role="assistant" content={<div className="flex items-center gap-2"><Loader2 className="h-5 w-5 animate-spin" /><span>CocoTalk réfléchit...</span></div>} />
+             <ChatMessage id="loading" role="assistant" content={<div className="flex items-center gap-2"><Loader2 className="h-5 w-5 animate-spin" /><span>L'assistant réfléchit...</span></div>} />
           )}
         </div>
       </ScrollArea>
