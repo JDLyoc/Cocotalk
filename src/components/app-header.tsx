@@ -70,12 +70,6 @@ export function AppHeader({ onLogoUpload }: AppHeaderProps) {
                         <span className="text-sm font-semibold">{userEmail}</span>
                     </div>
                 </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => alert("Fonction de déconnexion à implémenter")}>
-                        <LogOut className="mr-2 h-4 w-4" />
-                        Se déconnecter
-                    </Button>
-                </DialogFooter>
             </DialogContent>
         </Dialog>
       </div>
