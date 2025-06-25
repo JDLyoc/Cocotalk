@@ -2,14 +2,13 @@
 "use client";
 
 import * as React from "react";
-import { Paperclip, Send, Loader2, MessageSquare, Terminal } from "lucide-react";
+import { Paperclip, Send, Loader2, MessageSquare } from "lucide-react";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { ScrollArea } from "./ui/scroll-area";
 import { ChatMessage } from "./chat-message";
 import type { Message } from "@/app/page";
 import { useToast } from "@/hooks/use-toast";
-import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 
 
 interface ChatPanelProps {
@@ -96,16 +95,6 @@ export function ChatPanel({ messages, onSendMessage, isLoading, isWelcomeMode = 
             )}
           </div>
         </ScrollArea>
-      </div>
-      
-      <div className="absolute bottom-24 right-4 w-full max-w-sm z-10">
-        <Alert variant="destructive" className="shadow-lg">
-            <Terminal className="h-4 w-4" />
-            <AlertTitle className="font-bold">Compte non actif</AlertTitle>
-            <AlertDescription>
-            Votre compte est en attente de validation pour créer un nouveau chat.
-            </AlertDescription>
-        </Alert>
       </div>
 
       <div className="border-t p-4 bg-background">
