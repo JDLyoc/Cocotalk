@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, LogOut, MessageSquare, Plus } from "lucide-react";
+import { Bot, LogOut, MessageSquare, Sparkles } from "lucide-react";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import type { Conversation } from "@/app/page";
@@ -23,7 +23,7 @@ export function AppSidebar({
     <aside className="flex h-full w-full max-w-[280px] flex-col bg-sidebar text-sidebar-foreground p-4">
       <div className="space-y-2 mb-4">
         <Button size="lg" className="w-full justify-center font-semibold bg-accent text-accent-foreground hover:bg-accent/90 rounded-lg" onClick={createNewChat}>
-          <Plus className="mr-2 h-4 w-4" />
+          <Sparkles className="mr-2 h-4 w-4" />
           Nouveau Chat
         </Button>
       </div>
