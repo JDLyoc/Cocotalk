@@ -47,7 +47,7 @@ export function AppSidebar({
           ))}
         </div>
       </ScrollArea>
-      <div className="mt-auto border-t border-sidebar-foreground/10 -mx-4 pt-4 px-4">
+      <div className="mt-auto border-t -mx-4 p-4 bg-muted/50">
         <Button variant="ghost" className="w-full justify-start rounded-lg" onClick={() => alert("Fonction de déconnexion à implémenter")}>
             <LogOut className="mr-3 h-5 w-5" />
             <span className="font-medium">Se déconnecter</span>
