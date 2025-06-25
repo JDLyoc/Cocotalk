@@ -90,7 +90,6 @@ export function ChatPanel({ messages, onSendMessage, isLoading, title }: ChatPan
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}
             rows={1}
-            maxRows={5}
           />
           <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
              <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*,text/plain,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx" />
@@ -113,10 +112,4 @@ export function ChatPanel({ messages, onSendMessage, isLoading, title }: ChatPan
       </div>
     </div>
   );
-}
-
-declare module 'react' {
-    interface TextareaHTMLAttributes<T> extends HTMLAttributes<T> {
-        maxRows?: number;
-    }
 }
