@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquare, Plus, Bot } from "lucide-react";
+import { LayoutDashboard, MessageSquare, Plus, Bot } from "lucide-react";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import type { Conversation } from "@/app/page";
@@ -8,8 +8,8 @@ import { cn } from "@/lib/utils";
 
 interface AppSidebarProps {
   conversations: Conversation[];
-  activeConversationId: string;
-  setActiveConversationId: (id: string) => void;
+  activeConversationId: string | null;
+  setActiveConversationId: (id: string | null) => void;
   createNewChat: () => void;
 }
 
@@ -22,12 +22,21 @@ export function AppSidebar({
   return (
     <aside className="flex h-full w-full max-w-xs flex-col bg-card text-card-foreground p-4 border-r">
       <div className="flex items-center justify-center gap-3 pb-4 border-b mb-4">
-        <div className="bg-accent p-4 rounded-lg">
-          <Bot className="h-10 w-10 text-accent-foreground" />
+        <div className="bg-primary/10 p-3 rounded-lg">
+          <Bot className="h-10 w-10 text-primary" />
         </div>
       </div>
 
-      <Button variant="outline" className="mb-4" onClick={createNewChat}>
+      <Button
+        variant={!activeConversationId ? "secondary" : "ghost"}
+        className="mb-2 w-full justify-start"
+        onClick={() => setActiveConversationId(null)}
+      >
+        <LayoutDashboard className="mr-2 h-4 w-4" />
+        Tableau de bord
+      </Button>
+
+      <Button variant="outline" className="mb-4 w-full justify-start" onClick={createNewChat}>
         <Plus className="mr-2 h-4 w-4" />
         Nouvelle Conversation
       </Button>

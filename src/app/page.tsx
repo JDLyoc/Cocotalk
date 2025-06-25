@@ -5,6 +5,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { ChatPanel } from "@/components/chat-panel";
 import { handleChat } from "@/lib/actions";
 import { useToast } from "@/hooks/use-toast";
+import { Dashboard } from "@/components/dashboard";
 
 export interface Message {
   id: string;
@@ -36,7 +37,7 @@ export default function Home() {
       ],
     },
   ]);
-  const [activeConversationId, setActiveConversationId] = React.useState<string>("1");
+  const [activeConversationId, setActiveConversationId] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
@@ -52,6 +53,7 @@ export default function Home() {
   };
 
   const handleSendMessage = async (text: string, file: File | null) => {
+    if (!activeConversationId) return;
     if (!text && !file) return;
 
     setIsLoading(true);
@@ -145,9 +147,7 @@ export default function Home() {
             title={activeConversation.title}
           />
         ) : (
-          <div className="flex h-full items-center justify-center text-muted-foreground">
-            <p>Sélectionnez une conversation pour commencer</p>
-          </div>
+          <Dashboard />
         )}
       </main>
     </div>
