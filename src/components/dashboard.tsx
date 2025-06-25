@@ -6,6 +6,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { Bot, ImageIcon, MessageSquare, Users } from "lucide-react";
 import { ScrollArea } from "./ui/scroll-area";
 import { LogoUploaderFirebase } from "./logo-uploader-firebase";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 
 const activityData = [
@@ -22,7 +23,7 @@ export function Dashboard() {
   return (
       <ScrollArea className="flex-1 py-4">
         <div className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Conversations totales</CardTitle>
@@ -53,9 +54,34 @@ export function Dashboard() {
                 <p className="text-xs text-muted-foreground">Flash</p>
               </CardContent>
             </Card>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Card className="cursor-pointer transition-colors hover:bg-muted/50">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Logo d'entreprise</CardTitle>
+                    <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">Personnaliser</div>
+                    <p className="text-xs text-muted-foreground">Cliquez pour modifier</p>
+                  </CardContent>
+                </Card>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Personnalisation du Logo</DialogTitle>
+                    <DialogDescription>
+                        Téléversez le logo de votre entreprise. Il sera visible par tous les utilisateurs.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="pt-4">
+                  <LogoUploaderFirebase />
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
-          <div className="grid gap-4 md:grid-cols-3">
-            <Card className="md:col-span-2">
+          <div className="grid gap-4">
+            <Card>
               <CardHeader>
                 <CardTitle>Activité hebdomadaire</CardTitle>
                 <CardDescription>Nombre de conversations par jour.</CardDescription>
@@ -77,20 +103,6 @@ export function Dashboard() {
                           <Bar dataKey="conversations" name="Conversations" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                       </BarChart>
                   </ResponsiveContainer>
-              </CardContent>
-            </Card>
-             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                    <ImageIcon className="h-5 w-5" />
-                    Personnalisation du Logo
-                </CardTitle>
-                <CardDescription>
-                    Téléversez le logo de votre entreprise. Il sera visible par tous les utilisateurs.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <LogoUploaderFirebase />
               </CardContent>
             </Card>
           </div>
