@@ -32,13 +32,13 @@ export function AppSidebar({
           <Image
             src={logo}
             alt="App logo"
-            width={144}
-            height={144}
+            width={80}
+            height={80}
             className="rounded-md object-contain"
           />
         ) : (
-          <div className="bg-accent p-6 rounded-lg">
-            <Bot className="h-16 w-16 text-accent-foreground" />
+          <div className="bg-accent p-4 rounded-lg">
+            <Bot className="h-10 w-10 text-accent-foreground" />
           </div>
         )}
       </div>
