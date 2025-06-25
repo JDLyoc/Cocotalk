@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { MessageSquare, Plus, Bot } from "lucide-react";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
@@ -11,6 +12,7 @@ interface AppSidebarProps {
   activeConversationId: string | null;
   setActiveConversationId: (id: string | null) => void;
   createNewChat: () => void;
+  logo: string | null;
 }
 
 export function AppSidebar({
@@ -18,12 +20,23 @@ export function AppSidebar({
   activeConversationId,
   setActiveConversationId,
   createNewChat,
+  logo,
 }: AppSidebarProps) {
   return (
     <aside className="flex h-full w-full max-w-xs flex-col bg-card text-card-foreground p-4 border-r">
-      <div className="flex items-center justify-center gap-3 pb-4 border-b mb-4">
-        <div className="bg-primary/10 p-3 rounded-lg">
-          <Bot className="h-10 w-10 text-primary" />
+      <div className="flex items-center justify-center pt-2 pb-4 mb-2">
+        <div className="p-1 rounded-lg">
+          {logo ? (
+            <Image
+              src={logo}
+              alt="Custom user logo"
+              width={80}
+              height={80}
+              className="object-contain"
+            />
+          ) : (
+            <Bot className="h-20 w-20 text-primary" />
+          )}
         </div>
       </div>
 

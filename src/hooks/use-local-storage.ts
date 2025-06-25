@@ -1,35 +1,49 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from 'react';
 
-export function useLocalStorage<T>(key: string, defaultValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
-  const [value, setValue] = useState<T>(defaultValue);
-
-  useEffect(() => {
-    // Cet effet ne s'exécute que côté client, après le rendu initial, pour éviter les erreurs d'hydratation.
+export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T | ((val: T) => T)) => void] {
+  const [storedValue, setStoredValue] = useState<T>(() => {
+    if (typeof window === 'undefined') {
+      return initialValue;
+    }
     try {
       const item = window.localStorage.getItem(key);
-      if (item !== null) {
-        setValue(JSON.parse(item));
+      return item ? JSON.parse(item) : initialValue;
+    } catch (error) {
+      console.log(error);
+      return initialValue;
+    }
+  });
+
+  const setValue = (value: T | ((val: T) => T)) => {
+    try {
+      const valueToStore =
+        value instanceof Function ? value(storedValue) : value;
+      setStoredValue(valueToStore);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(key, JSON.stringify(valueToStore));
       }
     } catch (error) {
-      console.warn(`Erreur de lecture de la clé localStorage “${key}”:`, error);
+      console.log(error);
     }
+  };
+  
+  useEffect(() => {
+    const handleStorageChange = (event: StorageEvent) => {
+        if (event.key === key && event.newValue) {
+            try {
+                setStoredValue(JSON.parse(event.newValue));
+            } catch (error) {
+                console.log(error);
+            }
+        }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+        window.removeEventListener('storage', handleStorageChange);
+    };
   }, [key]);
 
-  const setValueAndStore = useCallback((newValue: React.SetStateAction<T>) => {
-    setValue(prevValue => {
-      // Permet à la nouvelle valeur d'être une fonction pour avoir la même API que useState
-      const valueToStore = newValue instanceof Function ? newValue(prevValue) : newValue;
-      try {
-        // Sauvegarde dans le localStorage
-        window.localStorage.setItem(key, JSON.stringify(valueToStore));
-      } catch (error) {
-        console.warn(`Erreur d'écriture de la clé localStorage “${key}”:`, error);
-      }
-      return valueToStore;
-    });
-  }, [key]);
-
-  return [value, setValueAndStore];
+  return [storedValue, setValue];
 }

@@ -16,9 +16,10 @@ interface ChatPanelProps {
   messages: Message[];
   onSendMessage: (text: string, file: File | null) => void;
   isLoading: boolean;
+  onLogoUpload: (base64: string | null) => void;
 }
 
-export function ChatPanel({ messages, onSendMessage, isLoading }: ChatPanelProps) {
+export function ChatPanel({ messages, onSendMessage, isLoading, onLogoUpload }: ChatPanelProps) {
   const [text, setText] = React.useState("");
   const [file, setFile] = React.useState<File | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -90,7 +91,7 @@ export function ChatPanel({ messages, onSendMessage, isLoading }: ChatPanelProps
               <DialogHeader>
                 <DialogTitle>Tableau de bord</DialogTitle>
               </DialogHeader>
-              <Dashboard />
+              <Dashboard onLogoUpload={onLogoUpload} />
             </DialogContent>
           </Dialog>
           <Button variant="ghost" size="icon" onClick={() => alert("Fonction de déconnexion à implémenter")}>

@@ -6,6 +6,7 @@ import { ChatPanel } from "@/components/chat-panel";
 import { handleChat } from "@/lib/actions";
 import { useToast } from "@/hooks/use-toast";
 import { Bot } from "lucide-react";
+import { useLocalStorage } from "@/hooks/use-local-storage";
 
 export interface Message {
   id: string;
@@ -36,6 +37,7 @@ function WelcomeScreen() {
 
 export default function Home() {
   const { toast } = useToast();
+  const [logo, setLogo] = useLocalStorage<string | null>('app-logo', null);
 
   const [conversations, setConversations] = React.useState<Conversation[]>([
     {
@@ -145,12 +147,13 @@ export default function Home() {
   }
 
   return (
-    <div className="flex h-screen w-full bg-background">
+    <div className="flex h-screen w-full bg-secondary">
       <AppSidebar
         conversations={conversations}
         activeConversationId={activeConversationId}
         setActiveConversationId={setActiveConversationId}
         createNewChat={createNewChat}
+        logo={logo}
       />
       <main className="flex flex-1 flex-col">
         {activeConversation ? (
@@ -158,6 +161,7 @@ export default function Home() {
             messages={activeConversation.messages}
             onSendMessage={handleSendMessage}
             isLoading={isLoading}
+            onLogoUpload={setLogo}
           />
         ) : (
           <WelcomeScreen />
