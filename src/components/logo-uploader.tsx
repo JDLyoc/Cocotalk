@@ -73,11 +73,11 @@ export function LogoUploader({ children, onLogoUpload }: LogoUploaderProps) {
             accept="image/png, image/jpeg, image/svg+xml"
           />
           <div
-            className="flex h-48 w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-border transition-colors hover:border-primary"
+            className="flex h-48 w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-white transition-colors hover:border-primary"
             onClick={() => fileInputRef.current?.click()}
           >
             {preview ? (
-              <Image src={preview} alt="Logo preview" width={100} height={100} className="max-h-full object-contain bg-transparent" />
+              <Image src={preview} alt="Logo preview" width={100} height={100} className="max-h-full object-contain" style={{ backgroundColor: 'transparent' }} />
             ) : (
               <div className="text-center text-muted-foreground">
                 <Upload className="mx-auto h-10 w-10" />
