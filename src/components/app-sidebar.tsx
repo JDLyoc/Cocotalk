@@ -26,8 +26,8 @@ export function AppSidebar({
   createNewChat,
 }: AppSidebarProps) {
   return (
-    <aside className="flex h-full w-full max-w-xs flex-col bg-card text-card-foreground p-4 border-r">
-      <div className="flex items-center justify-center gap-3 pb-4 border-b mb-4">
+    <aside className="flex h-full w-full max-w-xs flex-col bg-card text-card-foreground py-2 px-4 border-r">
+      <div className="flex items-center justify-center gap-3 pb-2 border-b mb-2">
         {logo ? (
           <Image
             src={logo}
