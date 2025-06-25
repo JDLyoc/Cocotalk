@@ -13,20 +13,16 @@ import * as React from "react";
 interface AppHeaderProps {
     logo: string | null;
     onLogoUpload: (base64: string | null) => void;
+    isLoading: boolean;
 }
 
 interface LogoProps {
     logo: string | null;
+    isLoading: boolean;
 }
 
-function Logo({ logo }: LogoProps) {
-    const [hasMounted, setHasMounted] = React.useState(false);
-
-    React.useEffect(() => {
-        setHasMounted(true);
-    }, []);
-
-    if (!hasMounted) {
+function Logo({ logo, isLoading }: LogoProps) {
+    if (isLoading) {
         return <Skeleton className="h-14 w-44" />;
     }
 
@@ -54,7 +50,7 @@ function Logo({ logo }: LogoProps) {
     )
 }
 
-export function AppHeader({ logo, onLogoUpload }: AppHeaderProps) {
+export function AppHeader({ logo, onLogoUpload, isLoading }: AppHeaderProps) {
   const userEmail = "contentredac@gmail.com";
   const getInitials = (email: string) => {
       const namePart = email.split('@')[0];
@@ -65,7 +61,7 @@ export function AppHeader({ logo, onLogoUpload }: AppHeaderProps) {
   return (
     <header className="flex h-16 items-center justify-between border-b bg-background px-4 md:px-6 z-10">
       <div className="flex items-center gap-6">
-        <Logo logo={logo} />
+        <Logo logo={logo} isLoading={isLoading} />
       </div>
       
       <div className="flex items-center gap-4">

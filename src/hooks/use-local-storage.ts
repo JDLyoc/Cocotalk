@@ -2,11 +2,10 @@
 
 import { useState, useEffect } from 'react';
 
-export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T | ((val: T) => T)) => void] {
+export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T | ((val: T) => T)) => void, boolean] {
   const [storedValue, setStoredValue] = useState<T>(initialValue);
+  const [loading, setLoading] = useState(true);
 
-  // On mount, we check if a value is in localStorage.
-  // This happens only on the client, avoiding hydration errors.
   useEffect(() => {
     try {
       const item = window.localStorage.getItem(key);
@@ -15,6 +14,8 @@ export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T 
       }
     } catch (error) {
       console.log(error);
+    } finally {
+      setLoading(false);
     }
   }, [key]);
 
@@ -52,5 +53,5 @@ export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T 
     };
   }, [key, initialValue]);
 
-  return [storedValue, setValue];
+  return [storedValue, setValue, loading];
 }
