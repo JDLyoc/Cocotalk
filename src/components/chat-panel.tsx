@@ -67,14 +67,23 @@ export function ChatPanel({ messages, onSendMessage, isLoading, isWelcomeMode = 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
     if (selectedFile) {
-        const supportedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'text/plain'];
+        const supportedTypes = [
+            'image/jpeg', 
+            'image/png', 
+            'image/webp', 
+            'image/gif', 
+            'text/plain',
+            'application/pdf',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        ];
         if(supportedTypes.includes(selectedFile.type)) {
             setFile(selectedFile);
         } else {
             toast({
                 variant: 'destructive',
                 title: 'Fichier non supporté',
-                description: 'Veuillez sélectionner une image (jpeg, png, etc.) ou un fichier texte (.txt).'
+                description: "Ce type de fichier n'est pas supporté. Veuillez sélectionner une image, un PDF, un document Word, Excel ou un fichier texte."
             });
         }
     }
@@ -114,7 +123,7 @@ export function ChatPanel({ messages, onSendMessage, isLoading, isWelcomeMode = 
             rows={1}
           />
           <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-             <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/jpeg,image/png,image/webp,image/gif,text/plain" />
+             <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/jpeg,image/png,image/webp,image/gif,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
