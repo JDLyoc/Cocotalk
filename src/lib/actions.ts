@@ -49,7 +49,8 @@ export async function handleChat(
 
   const fullMessage = contextText ? `${contextText} Message de l'utilisateur: ${text}` : text;
   
-  // For now, we are not using history but this can be enhanced to use it
+  // The history parameter is now passed correctly, but the AI flow currently only uses the last message.
+  // This can be enhanced in the future to provide more context to the AI.
   const response = await multilingualChat({ message: fullMessage });
 
   return { response: response.response };

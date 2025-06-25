@@ -108,15 +108,17 @@ export default function Home() {
 
   const handleSendMessage = async (text: string, file: File | null) => {
     let currentChatId = activeConversationId;
-    if (!currentChatId) {
-        const newId = createNewChat(true);
-        currentChatId = newId;
+    let isNewChat = !currentChatId;
+  
+    if (isNewChat) {
+      const newId = createNewChat(true);
+      currentChatId = newId;
     }
-
+  
     if (!text && !file) return;
-
+  
     setIsLoading(true);
-
+  
     const userMessageContent = (
       <div className="flex flex-col gap-2">
         <p>{text}</p>
@@ -127,19 +129,39 @@ export default function Home() {
         )}
       </div>
     );
-    
-    // Add message to the correct conversation
+  
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: userMessageContent,
+      text_content: text,
+    };
+  
+    const conversationBeforeUpdate = conversations.find(c => c.id === currentChatId);
+    const isFirstMessage = isNewChat || (conversationBeforeUpdate?.messages.length === 0);
+  
     setConversations(prev =>
-        prev.map(conv =>
-          conv.id === currentChatId
-            ? { ...conv, messages: [...conv.messages, { id: Date.now().toString(), role: 'user', content: userMessageContent, text_content: text }] }
-            : conv
-        )
-      );
-
+      prev.map(conv => {
+        if (conv.id === currentChatId) {
+          const newTitle = isFirstMessage && text
+            ? text.split(' ').slice(0, 3).join(' ') + (text.split(' ').length > 3 ? '...' : '')
+            : conv.title;
+          
+          return {
+            ...conv,
+            title: newTitle,
+            messages: [...conv.messages, userMessage],
+          };
+        }
+        return conv;
+      })
+    );
+    
+    const historyForApi = [...(conversationBeforeUpdate?.messages ?? []), userMessage];
+  
     try {
-      const response = await handleChat(activeConversation?.messages ?? [], text, file);
-
+      const response = await handleChat(historyForApi, text, file);
+  
       if (response.error) {
         toast({
           variant: "destructive",
@@ -147,20 +169,20 @@ export default function Home() {
           description: response.error,
         });
         setConversations(prev =>
-            prev.map(conv =>
-              conv.id === currentChatId
-                ? { ...conv, messages: [...conv.messages, { id: Date.now().toString() + 'err', role: 'system', content: <p className="text-destructive">{response.error}</p>, text_content: response.error}] }
-                : conv
-            )
-          );
+          prev.map(conv =>
+            conv.id === currentChatId
+              ? { ...conv, messages: [...conv.messages, { id: Date.now().toString() + 'err', role: 'system', content: <p className="text-destructive">{response.error}</p>, text_content: response.error }] }
+              : conv
+          )
+        );
       } else {
         setConversations(prev =>
-            prev.map(conv =>
-              conv.id === currentChatId
-                ? { ...conv, messages: [...conv.messages, { id: Date.now().toString(), role: "assistant", content: response.response, text_content: response.response }] }
-                : conv
-            )
-          );
+          prev.map(conv =>
+            conv.id === currentChatId
+              ? { ...conv, messages: [...conv.messages, { id: Date.now().toString(), role: "assistant", content: response.response, text_content: response.response }] }
+              : conv
+          )
+        );
       }
     } catch (e) {
       const errorMsg = "Une erreur est survenue. Veuillez réessayer.";
@@ -172,7 +194,7 @@ export default function Home() {
       setConversations(prev =>
         prev.map(conv =>
           conv.id === currentChatId
-            ? { ...conv, messages: [...conv.messages, { id: Date.now().toString() + 'err', role: 'system', content: <p className="text-destructive">{errorMsg}</p>, text_content: errorMsg}] }
+            ? { ...conv, messages: [...conv.messages, { id: Date.now().toString() + 'err', role: 'system', content: <p className="text-destructive">{errorMsg}</p>, text_content: errorMsg }] }
             : conv
         )
       );
