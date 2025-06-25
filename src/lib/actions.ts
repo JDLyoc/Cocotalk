@@ -4,7 +4,10 @@
 import { multilingualChat } from "@/ai/flows/multilingual-chat";
 import { decodeImage } from "@/ai/flows/image-decoder";
 import { summarizeDocument } from "@/ai/flows/summarize-document";
-import type { Message } from "@/app/page";
+// Note: The 'DisplayMessage' type is imported for type compatibility in function signature,
+// but the history parameter itself is not currently used in the logic.
+// The AI flow only processes the latest user input.
+import type { DisplayMessage } from "@/app/page";
 
 async function fileToDataUri(file: File): Promise<string> {
   const buffer = await file.arrayBuffer();
@@ -17,7 +20,7 @@ async function fileToText(file: File): Promise<string> {
 }
 
 export async function handleChat(
-  history: Message[],
+  history: DisplayMessage[],
   text: string,
   file: File | null
 ) {
@@ -55,3 +58,5 @@ export async function handleChat(
 
   return { response: response.response };
 }
+
+    

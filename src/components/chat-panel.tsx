@@ -7,12 +7,12 @@ import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { ScrollArea } from "./ui/scroll-area";
 import { ChatMessage } from "./chat-message";
-import type { Message } from "@/app/page";
+import type { DisplayMessage } from "@/app/page";
 import { useToast } from "@/hooks/use-toast";
 
 
 interface ChatPanelProps {
-  messages: Message[];
+  messages: DisplayMessage[];
   onSendMessage: (text: string, file: File | null) => void;
   isLoading: boolean;
   isWelcomeMode?: boolean;
@@ -50,6 +50,7 @@ export function ChatPanel({ messages, onSendMessage, isLoading, isWelcomeMode = 
 
   const handleSend = () => {
     if (isLoading) return;
+    if (!text.trim() && !file) return;
     onSendMessage(text, file);
     setText("");
     setFile(null);
@@ -88,7 +89,7 @@ export function ChatPanel({ messages, onSendMessage, isLoading, isWelcomeMode = 
           {isWelcomeMode && messages.length === 0 && <WelcomeScreen />}
           <div className="space-y-6">
             {messages.map((msg) => (
-              <ChatMessage key={msg.id} {...msg} />
+              <ChatMessage key={msg.id} role={msg.role} content={msg.content} />
             ))}
             {isLoading && (
                <ChatMessage id="loading" role="assistant" content={<div className="flex items-center gap-2"><Loader2 className="h-5 w-5 animate-spin" /><span>L'assistant réfléchit...</span></div>} />
@@ -129,3 +130,5 @@ export function ChatPanel({ messages, onSendMessage, isLoading, isWelcomeMode = 
     </div>
   );
 }
+
+    

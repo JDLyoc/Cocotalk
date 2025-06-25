@@ -7,21 +7,55 @@ import { ChatPanel } from "@/components/chat-panel";
 import { handleChat } from "@/lib/actions";
 import { useToast } from "@/hooks/use-toast";
 import { AppHeader } from "@/components/app-header";
-import { auth } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  collection,
+  query,
+  orderBy,
+  onSnapshot,
+  addDoc,
+  serverTimestamp,
+  doc,
+  updateDoc,
+  deleteDoc,
+  Timestamp,
+} from "firebase/firestore";
 
-export interface Message {
+// Interface for messages passed to components (with ReactNode)
+export interface DisplayMessage {
   id: string;
   role: "user" | "assistant" | "system";
   content: React.ReactNode;
   text_content?: string;
 }
 
-export interface Conversation {
+// Interface for messages stored in Firestore (plain data)
+export interface StoredMessage {
+  id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  file?: {
+      name: string;
+      type: string;
+  };
+}
+
+// Interface for conversations passed to components
+export interface DisplayConversation {
   id: string;
   title: string;
-  messages: Message[];
+  messages: DisplayMessage[];
+}
+
+// Interface for conversations stored in Firestore
+export interface StoredConversation {
+  id: string;
+  title: string;
+  messages: StoredMessage[];
+  createdAt: Timestamp;
+  userId: string;
 }
 
 function AppSkeleton() {
@@ -61,10 +95,11 @@ function AppSkeleton() {
 export default function Home() {
   const { toast } = useToast();
   
-  const [conversations, setConversations] = React.useState<Conversation[]>([]);
+  const [conversations, setConversations] = React.useState<StoredConversation[]>([]);
   const [activeConversationId, setActiveConversationId] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
   const [isAuthReady, setIsAuthReady] = React.useState(false);
+  const [isDataLoading, setIsDataLoading] = React.useState(true);
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
   
@@ -87,170 +122,225 @@ export default function Home() {
   }, [toast]);
 
   React.useEffect(() => {
-    if (conversations.length > 0 && !activeConversationId) {
-      setActiveConversationId(conversations[0].id);
+    if (!isAuthReady || !auth.currentUser) {
+        setIsDataLoading(false);
+        return;
     }
-    if (conversations.length === 0) {
-      setActiveConversationId(null);
-    }
-  }, [conversations, activeConversationId]);
 
-  const addMessage = (message: Message) => {
-    if (!activeConversationId) return;
-    setConversations(prev =>
-      prev.map(conv =>
-        conv.id === activeConversationId
-          ? { ...conv, messages: [...conv.messages, message] }
-          : conv
-      )
+    const q = query(
+        collection(db, "users", auth.currentUser.uid, "conversations"),
+        orderBy("createdAt", "desc")
     );
-  };
 
-  const handleSendMessage = async (text: string, file: File | null) => {
-    let currentChatId = activeConversationId;
-    let isNewChat = !currentChatId;
-  
-    if (isNewChat) {
-      const newId = createNewChat(true);
-      currentChatId = newId;
-    }
-  
-    if (!text && !file) return;
-  
-    setIsLoading(true);
-  
-    const userMessageContent = (
-      <div className="flex flex-col gap-2">
-        <p>{text}</p>
-        {file && (
-          <div className="mt-2 p-2 border rounded-lg bg-muted/50 text-sm">
-            Fichier joint: {file.name}
-          </div>
-        )}
-      </div>
-    );
-  
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content: userMessageContent,
-      text_content: text,
-    };
-  
-    const conversationBeforeUpdate = conversations.find(c => c.id === currentChatId);
-    const isFirstMessage = isNewChat || (conversationBeforeUpdate?.messages.length === 0);
-  
-    setConversations(prev =>
-      prev.map(conv => {
-        if (conv.id === currentChatId) {
-          const newTitle = isFirstMessage && text
-            ? text.split(' ').slice(0, 3).join(' ') + (text.split(' ').length > 3 ? '...' : '')
-            : conv.title;
-          
-          return {
-            ...conv,
-            title: newTitle,
-            messages: [...conv.messages, userMessage],
-          };
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        const conversationsData = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+        } as StoredConversation));
+        setConversations(conversationsData);
+        
+        if (isDataLoading) {
+            if (conversationsData.length > 0 && !activeConversationId) {
+                setActiveConversationId(conversationsData[0].id);
+            }
+            setIsDataLoading(false);
         }
-        return conv;
-      })
-    );
-    
-    const historyForApi = [...(conversationBeforeUpdate?.messages ?? []), userMessage];
-  
-    try {
-      const response = await handleChat(historyForApi, text, file);
-  
-      if (response.error) {
+    }, (error) => {
+        console.error("Error fetching conversations:", error);
         toast({
+            variant: "destructive",
+            title: "Erreur de chargement",
+            description: "Impossible de charger les conversations.",
+        });
+        setIsDataLoading(false);
+    });
+
+    return () => unsubscribe();
+}, [isAuthReady, isDataLoading, activeConversationId, toast]);
+
+
+const handleSendMessage = async (text: string, file: File | null) => {
+  if (!auth.currentUser) {
+      toast({ variant: "destructive", title: "Erreur", description: "Utilisateur non authentifié." });
+      return;
+  }
+  setIsLoading(true);
+
+  let currentChatId = activeConversationId;
+  const userId = auth.currentUser.uid;
+
+  try {
+      // Create new chat if none is active
+      if (!currentChatId) {
+          const newTitle = text
+              ? text.split(' ').slice(0, 3).join(' ') + (text.split(' ').length > 3 ? '...' : '')
+              : file?.name || "Nouvelle conversation";
+          
+          const newConvRef = await addDoc(collection(db, "users", userId, "conversations"), {
+              title: newTitle,
+              messages: [],
+              createdAt: serverTimestamp(),
+              userId: userId,
+          });
+          currentChatId = newConvRef.id;
+          setActiveConversationId(newConvRef.id);
+      }
+
+      const convRef = doc(db, "users", userId, "conversations", currentChatId!);
+      const currentMessages = conversations.find(c => c.id === currentChatId)?.messages || [];
+
+      // Add user message
+      const userMessage: StoredMessage = {
+          id: Date.now().toString(),
+          role: "user",
+          content: text,
+          ...(file && { file: { name: file.name, type: file.type } }),
+      };
+      const messagesWithUser = [...currentMessages, userMessage];
+      await updateDoc(convRef, { messages: messagesWithUser });
+
+      // Call AI for response
+      const apiHistory = messagesWithUser.map(m => ({...m, content: <p>{m.content}</p>, text_content: m.content})) as any;
+      const response = await handleChat(apiHistory, text, file);
+
+      if (response.error) {
+          throw new Error(response.error);
+      }
+
+      // Add assistant response
+      const assistantMessage: StoredMessage = {
+          id: Date.now().toString() + 'a',
+          role: 'assistant',
+          content: response.response,
+      };
+      await updateDoc(convRef, { messages: [...messagesWithUser, assistantMessage] });
+
+  } catch (e: any) {
+      const errorMsg = e.message || "Une erreur est survenue. Veuillez réessayer.";
+      toast({
           variant: "destructive",
           title: "Erreur",
-          description: response.error,
-        });
-        setConversations(prev =>
-          prev.map(conv =>
-            conv.id === currentChatId
-              ? { ...conv, messages: [...conv.messages, { id: Date.now().toString() + 'err', role: 'system', content: <p className="text-destructive">{response.error}</p>, text_content: response.error }] }
-              : conv
-          )
-        );
-      } else {
-        setConversations(prev =>
-          prev.map(conv =>
-            conv.id === currentChatId
-              ? { ...conv, messages: [...conv.messages, { id: Date.now().toString(), role: "assistant", content: response.response, text_content: response.response }] }
-              : conv
-          )
-        );
-      }
-    } catch (e) {
-      const errorMsg = "Une erreur est survenue. Veuillez réessayer.";
-      toast({
-        variant: "destructive",
-        title: "Erreur",
-        description: errorMsg,
+          description: errorMsg,
       });
-      setConversations(prev =>
-        prev.map(conv =>
-          conv.id === currentChatId
-            ? { ...conv, messages: [...conv.messages, { id: Date.now().toString() + 'err', role: 'system', content: <p className="text-destructive">{errorMsg}</p>, text_content: errorMsg }] }
-            : conv
-        )
-      );
-    } finally {
+  } finally {
       setIsLoading(false);
-    }
-  };
+  }
+};
 
-  const createNewChat = (silent = false) => {
-    const newId = Date.now().toString();
-    const newConversation: Conversation = {
-      id: newId,
-      title: `Conversation #${conversations.length + 1}`,
-      messages: []
-    };
-    setConversations(prev => [newConversation, ...prev]);
-    if (!silent) {
-        setActiveConversationId(newId);
+
+  const createNewChat = async () => {
+    if (!auth.currentUser) return;
+    try {
+        const docRef = await addDoc(collection(db, "users", auth.currentUser.uid, "conversations"), {
+            title: `Nouvelle Conversation`,
+            messages: [],
+            createdAt: serverTimestamp(),
+            userId: auth.currentUser.uid,
+        });
+        setActiveConversationId(docRef.id);
+    } catch (error) {
+        console.error("Error creating new chat:", error);
+        toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de créer une nouvelle conversation.' });
     }
-    return newId;
   }
   
-  const handleRenameConversation = (id: string, title: string) => {
-    setConversations(prev =>
-      prev.map(conv => (conv.id === id ? { ...conv, title } : conv))
-    );
-  };
-
-  const handleDeleteConversation = (id: string) => {
-    if (activeConversationId === id) {
-      setActiveConversationId(null);
+  const handleRenameConversation = async (id: string, title: string) => {
+    if (!auth.currentUser) return;
+    const convRef = doc(db, "users", auth.currentUser.uid, "conversations", id);
+    try {
+        await updateDoc(convRef, { title });
+    } catch (error) {
+        console.error("Error renaming conversation:", error);
+        toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de renommer la conversation.' });
     }
-    setConversations(prev => prev.filter(conv => conv.id !== id));
   };
 
-  if (!isAuthReady) {
+  const handleDeleteConversation = async (id: string) => {
+    if (!auth.currentUser) return;
+    
+    if (activeConversationId === id) {
+        const currentIndex = conversations.findIndex(c => c.id === id);
+        if (conversations.length > 1) {
+            const newActiveIndex = currentIndex > 0 ? currentIndex - 1 : 1;
+            if (conversations[newActiveIndex]) {
+              setActiveConversationId(conversations[newActiveIndex].id);
+            } else {
+              setActiveConversationId(null);
+            }
+        } else {
+            setActiveConversationId(null);
+        }
+    }
+    
+    const convRef = doc(db, "users", auth.currentUser.uid, "conversations", id);
+    try {
+        await deleteDoc(convRef);
+    } catch (error) {
+        console.error("Error deleting conversation:", error);
+        toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de supprimer la conversation.' });
+    }
+  };
+
+  if (!isAuthReady || isDataLoading) {
     return <AppSkeleton />;
   }
+
+  // --- Mapping functions to convert stored data to display data ---
+  const toDisplayMessages = (messages: StoredMessage[]): DisplayMessage[] => {
+    return messages.map(msg => {
+      let contentNode: React.ReactNode;
+      if (msg.role === 'user') {
+          contentNode = (
+              <>
+                  {msg.content && <p className="!my-0">{msg.content}</p>}
+                  {msg.file && (
+                      <div className="mt-2 p-2 border rounded-lg bg-muted text-muted-foreground text-sm">
+                          Fichier joint: {msg.file.name}
+                      </div>
+                  )}
+              </>
+          );
+      } else {
+          contentNode = <p className="!my-0">{msg.content}</p>;
+      }
+      return {
+        id: msg.id,
+        role: msg.role,
+        content: contentNode,
+        text_content: msg.content,
+      };
+    });
+  };
+
+  const displayConversations: DisplayConversation[] = conversations.map(conv => ({
+    id: conv.id,
+    title: conv.title,
+    messages: [], // We only need messages for the active conversation
+  }));
+
+  const activeDisplayConversation = activeConversation ? {
+    id: activeConversation.id,
+    title: activeConversation.title,
+    messages: toDisplayMessages(activeConversation.messages),
+  } : null;
 
   return (
     <div className="flex flex-col h-screen w-full bg-background overflow-hidden">
       <AppHeader />
       <div className="flex flex-1 overflow-hidden">
         <AppSidebar
-          conversations={conversations}
+          conversations={displayConversations}
           activeConversationId={activeConversationId}
           setActiveConversationId={setActiveConversationId}
-          createNewChat={() => createNewChat()}
+          createNewChat={createNewChat}
           onDeleteConversation={handleDeleteConversation}
           onRenameConversation={handleRenameConversation}
         />
         <main className="flex flex-1 flex-col">
-          {activeConversation ? (
+          {activeDisplayConversation ? (
             <ChatPanel
               key={activeConversationId}
-              messages={activeConversation.messages}
+              messages={activeDisplayConversation.messages}
               onSendMessage={handleSendMessage}
               isLoading={isLoading}
             />
@@ -268,3 +358,5 @@ export default function Home() {
     </div>
   );
 }
+
+    

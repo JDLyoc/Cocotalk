@@ -1,11 +1,12 @@
+
 "use client";
 
 import { Bot, User } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { cn } from "@/lib/utils";
-import type { Message } from "@/app/page";
+import type { DisplayMessage } from "@/app/page";
 
-export function ChatMessage({ role, content }: Omit<Message, 'id'>) {
+export function ChatMessage({ role, content }: Omit<DisplayMessage, 'id' | 'text_content'>) {
   const isUser = role === "user";
 
   return (
@@ -37,3 +38,5 @@ export function ChatMessage({ role, content }: Omit<Message, 'id'>) {
     </div>
   );
 }
+
+    

@@ -5,7 +5,7 @@ import * as React from "react";
 import { LogOut, MessageSquare, Sparkles, MoreHorizontal, Edit, Trash2 } from "lucide-react";
 import { Button, buttonVariants } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
-import type { Conversation } from "@/app/page";
+import type { DisplayConversation } from "@/app/page";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -36,7 +36,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 
 interface AppSidebarProps {
-  conversations: Conversation[];
+  conversations: DisplayConversation[];
   activeConversationId: string | null;
   setActiveConversationId: (id: string | null) => void;
   createNewChat: () => void;
@@ -52,10 +52,10 @@ export function AppSidebar({
   onDeleteConversation,
   onRenameConversation,
 }: AppSidebarProps) {
-  const [renameTarget, setRenameTarget] = React.useState<Conversation | null>(null);
+  const [renameTarget, setRenameTarget] = React.useState<DisplayConversation | null>(null);
   const [newTitle, setNewTitle] = React.useState("");
 
-  const handleRenameClick = (conv: Conversation) => {
+  const handleRenameClick = (conv: DisplayConversation) => {
     setRenameTarget(conv);
     setNewTitle(conv.title.endsWith("...") ? "" : conv.title);
   };
@@ -179,3 +179,5 @@ export function AppSidebar({
     </>
   );
 }
+
+    
