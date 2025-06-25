@@ -3,18 +3,20 @@
 import { useState, useEffect } from 'react';
 
 export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T | ((val: T) => T)) => void] {
-  const [storedValue, setStoredValue] = useState<T>(() => {
-    if (typeof window === 'undefined') {
-      return initialValue;
-    }
+  const [storedValue, setStoredValue] = useState<T>(initialValue);
+
+  // On mount, we check if a value is in localStorage.
+  // This happens only on the client, avoiding hydration errors.
+  useEffect(() => {
     try {
       const item = window.localStorage.getItem(key);
-      return item ? JSON.parse(item) : initialValue;
+      if (item) {
+        setStoredValue(JSON.parse(item));
+      }
     } catch (error) {
       console.log(error);
-      return initialValue;
     }
-  });
+  }, [key]);
 
   const setValue = (value: T | ((val: T) => T)) => {
     try {
@@ -31,19 +33,24 @@ export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T 
   
   useEffect(() => {
     const handleStorageChange = (event: StorageEvent) => {
-        if (event.key === key && event.newValue) {
+        if (event.key === key) {
+          if (event.newValue) {
             try {
                 setStoredValue(JSON.parse(event.newValue));
             } catch (error) {
                 console.log(error);
             }
+          } else {
+            // value was removed from another tab
+            setStoredValue(initialValue);
+          }
         }
     };
     window.addEventListener('storage', handleStorageChange);
     return () => {
         window.removeEventListener('storage', handleStorageChange);
     };
-  }, [key]);
+  }, [key, initialValue]);
 
   return [storedValue, setValue];
 }

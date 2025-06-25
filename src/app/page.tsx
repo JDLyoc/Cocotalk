@@ -40,17 +40,12 @@ function WelcomeScreen() {
 export default function Home() {
   const { toast } = useToast();
   const [logo, setLogo] = useLocalStorage<string | null>('app-logo', null);
-  const [hasMounted, setHasMounted] = React.useState(false);
 
   const [conversations, setConversations] = React.useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
-  
-  React.useEffect(() => {
-    setHasMounted(true);
-  }, []);
   
   React.useEffect(() => {
     if (conversations.length > 0 && !activeConversationId) {
@@ -163,7 +158,7 @@ export default function Home() {
 
   return (
     <div className="flex flex-col h-screen w-full bg-background overflow-hidden">
-      <AppHeader logo={hasMounted ? logo : null} onLogoUpload={setLogo} />
+      <AppHeader logo={logo} onLogoUpload={setLogo} />
       <div className="flex flex-1 overflow-hidden">
         <AppSidebar
           conversations={conversations}
