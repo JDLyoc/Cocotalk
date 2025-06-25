@@ -39,7 +39,7 @@ export function AppSidebar({
               key={conv.id}
               variant={conv.id === activeConversationId ? "secondary" : "ghost"}
               className={cn(
-                "w-full justify-start font-normal",
+                "w-full justify-start font-normal rounded-lg",
                 conv.id === activeConversationId ? "bg-black/20 text-white" : "hover:bg-accent hover:text-accent-foreground"
               )}
               onClick={() => setActiveConversationId(conv.id)}
@@ -51,7 +51,7 @@ export function AppSidebar({
         </div>
       </ScrollArea>
       <div className="mt-auto border-t border-sidebar-foreground/10 -mx-4 pt-4 px-4">
-        <Button variant="ghost" className="w-full justify-start hover:bg-accent hover:text-accent-foreground" onClick={() => alert("Fonction de déconnexion à implémenter")}>
+        <Button variant="ghost" className="w-full justify-start hover:bg-accent hover:text-accent-foreground rounded-lg" onClick={() => alert("Fonction de déconnexion à implémenter")}>
             <LogOut className="mr-3 h-5 w-5" />
             <span className="font-medium">Se déconnecter</span>
         </Button>
