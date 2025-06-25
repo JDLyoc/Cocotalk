@@ -27,18 +27,18 @@ export function AppSidebar({
 }: AppSidebarProps) {
   return (
     <aside className="flex h-full w-full max-w-xs flex-col bg-card text-card-foreground p-4 border-r">
-      <div className="flex items-center gap-3 pb-4 border-b mb-4">
+      <div className="flex items-center justify-center gap-3 pb-4 border-b mb-4">
         {logo ? (
           <Image
             src={logo}
             alt="App logo"
-            width={48}
-            height={48}
+            width={144}
+            height={144}
             className="rounded-md object-contain"
           />
         ) : (
-          <div className="bg-accent p-3 rounded-lg">
-            <Bot className="h-8 w-8 text-accent-foreground" />
+          <div className="bg-accent p-6 rounded-lg">
+            <Bot className="h-16 w-16 text-accent-foreground" />
           </div>
         )}
       </div>
