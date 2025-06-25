@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -82,6 +81,11 @@ export function ChatPanel({ messages, onSendMessage, isLoading, isWelcomeMode = 
     }
   };
 
+  const handleAttachClick = () => {
+    toast({ title: 'Ajouter des fichiers' });
+    fileInputRef.current?.click();
+  };
+
   return (
     <div className="flex h-full flex-col relative">
       <div className="flex-1 relative">
@@ -114,12 +118,12 @@ export function ChatPanel({ messages, onSendMessage, isLoading, isWelcomeMode = 
               type="button"
               variant="ghost"
               size="icon"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={handleAttachClick}
             >
               <Paperclip className="h-5 w-5" />
               <span className="sr-only">Joindre un fichier</span>
             </Button>
-            <Button type="submit" size="icon" onClick={handleSend} disabled={isLoading || (!text && !file)} className="bg-[#3C63A6] hover:bg-[#3C63A6]/90 disabled:bg-[#3C63A6] disabled:opacity-75">
+            <Button type="submit" size="icon" onClick={handleSend} disabled={isLoading || (!text && !file)} className="bg-[#3C63A6] hover:bg-[#3C63A6]/90 disabled:bg-[#3C63A6] disabled:opacity-70">
               <Send className="h-5 w-5" />
               <span className="sr-only">Envoyer</span>
             </Button>
