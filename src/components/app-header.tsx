@@ -7,17 +7,24 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Dashboard } from "./dashboard";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import Image from "next/image";
+import { Skeleton } from "./ui/skeleton";
 
 interface AppHeaderProps {
     logo: string | null;
     onLogoUpload: (base64: string | null) => void;
+    hasMounted: boolean;
 }
 
 interface LogoProps {
     logo: string | null;
+    hasMounted: boolean;
 }
 
-function Logo({ logo }: LogoProps) {
+function Logo({ logo, hasMounted }: LogoProps) {
+    if (!hasMounted) {
+        return <Skeleton className="h-8 w-36" />;
+    }
+
     if (logo) {
         return (
             <div className="flex items-center gap-2 h-8">
@@ -36,7 +43,7 @@ function Logo({ logo }: LogoProps) {
     )
 }
 
-export function AppHeader({ logo, onLogoUpload }: AppHeaderProps) {
+export function AppHeader({ logo, onLogoUpload, hasMounted }: AppHeaderProps) {
   const userEmail = "contentredac@gmail.com";
   const getInitials = (email: string) => {
       const namePart = email.split('@')[0];
@@ -47,7 +54,7 @@ export function AppHeader({ logo, onLogoUpload }: AppHeaderProps) {
   return (
     <header className="flex h-16 items-center justify-between border-b bg-background px-4 md:px-6 z-10">
       <div className="flex items-center gap-6">
-        <Logo logo={logo} />
+        <Logo logo={logo} hasMounted={hasMounted} />
       </div>
       
       <div className="flex items-center gap-4">
