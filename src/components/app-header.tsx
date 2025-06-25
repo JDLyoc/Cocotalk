@@ -27,19 +27,19 @@ function Logo({ logo }: LogoProps) {
     }, []);
 
     if (!hasMounted) {
-        return <Skeleton className="h-8 w-36" />;
+        return <Skeleton className="h-10 w-44" />;
     }
 
     if (logo) {
         return (
-            <div className="flex items-center gap-2 h-8 bg-transparent">
-                <Image src={logo} alt="Uploaded Logo" width={140} height={32} className="object-contain h-full w-auto bg-transparent" />
+            <div className="flex items-center gap-2 h-10 bg-transparent">
+                <Image src={logo} alt="Uploaded Logo" width={140} height={40} className="object-contain h-full w-auto bg-transparent" />
             </div>
         )
     }
 
     return (
-        <div className="flex items-center gap-2 text-lg font-bold tracking-tight">
+        <div className="flex items-center gap-2 h-10 text-lg font-bold tracking-tight">
             <div className="flex flex-col items-start leading-tight">
                 <span className="font-extrabold">iaChat<span className="text-primary">MG</span></span>
                 <span className="text-xs font-normal text-muted-foreground">WorldWide</span>
@@ -88,7 +88,7 @@ export function AppHeader({ logo, onLogoUpload }: AppHeaderProps) {
             </DialogTrigger>
             <DialogContent className="sm:max-w-md p-0 gap-0">
                 <DialogHeader className="bg-accent text-white p-4 rounded-t-lg">
-                    <DialogTitle>Profil Utilisateur</DialogTitle>
+                    <DialogTitle className="text-white">Profil Utilisateur</DialogTitle>
                 </DialogHeader>
                 <div className="p-6">
                     <div className="flex items-center gap-4">
