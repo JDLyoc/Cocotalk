@@ -7,6 +7,8 @@ import { ChatPanel } from "@/components/chat-panel";
 import { handleChat } from "@/lib/actions";
 import { useToast } from "@/hooks/use-toast";
 import { AppHeader } from "@/components/app-header";
+import { auth } from "@/lib/firebase";
+import { signInAnonymously } from "firebase/auth";
 
 export interface Message {
   id: string;
@@ -30,6 +32,24 @@ export default function Home() {
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
   
+  React.useEffect(() => {
+    const signIn = async () => {
+        try {
+            await signInAnonymously(auth);
+        } catch (error) {
+            console.error("Anonymous sign-in failed:", error);
+            toast({
+                variant: "destructive",
+                title: "Erreur d'authentification",
+                description: "Impossible de se connecter au backend.",
+            });
+        }
+    };
+    if (!auth.currentUser) {
+        signIn();
+    }
+  }, [toast]);
+
   React.useEffect(() => {
     if (conversations.length > 0 && !activeConversationId) {
       setActiveConversationId(conversations[0].id);
