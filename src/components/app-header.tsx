@@ -43,7 +43,7 @@ export function AppHeader() {
 
   return (
     <header className="flex h-16 items-center justify-between border-b bg-background px-4 md:px-6 z-10">
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-6 pl-2">
         <div className="flex items-center h-12">
           {isLoadingLogo ? (
             <Skeleton className="h-12 w-[152px]" />
