@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -5,8 +6,9 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { ChatPanel } from "@/components/chat-panel";
 import { handleChat } from "@/lib/actions";
 import { useToast } from "@/hooks/use-toast";
-import { Bot } from "lucide-react";
+import { MessageSquare } from "lucide-react";
 import { useLocalStorage } from "@/hooks/use-local-storage";
+import { AppHeader } from "@/components/app-header";
 
 export interface Message {
   id: string;
@@ -23,13 +25,13 @@ export interface Conversation {
 
 function WelcomeScreen() {
   return (
-    <div className="flex h-full flex-col items-center justify-center bg-background text-center">
-      <div className="bg-primary/10 p-4 rounded-full mb-4">
-        <Bot className="h-12 w-12 text-primary" />
+    <div className="flex h-full flex-col items-center justify-center bg-background text-center p-4">
+      <div className="p-4 rounded-full mb-4">
+        <MessageSquare className="h-16 w-16 text-accent" />
       </div>
-      <h2 className="text-2xl font-semibold">Bienvenue !</h2>
-      <p className="text-muted-foreground mt-2">
-        Sélectionnez une conversation ou démarrez-en une nouvelle pour commencer.
+      <h2 className="text-3xl font-semibold">Commencez une conversation</h2>
+      <p className="text-muted-foreground mt-2 max-w-md">
+        Posez-moi n'importe quelle question ! Je suis là pour vous aider avec des informations, résoudre des problèmes ou simplement discuter.
       </p>
     </div>
   );
@@ -39,26 +41,23 @@ export default function Home() {
   const { toast } = useToast();
   const [logo, setLogo] = useLocalStorage<string | null>('app-logo', null);
 
-  const [conversations, setConversations] = React.useState<Conversation[]>([
-    {
-      id: "1",
-      title: "Conversation de bienvenue",
-      messages: [
-        {
-          id: "1",
-          role: "assistant",
-          content: "Bonjour! Je suis votre assistant. Comment puis-je vous aider aujourd'hui?",
-          text_content: "Bonjour! Je suis votre assistant. Comment puis-je vous aider aujourd'hui?"
-        },
-      ],
-    },
-  ]);
-  const [activeConversationId, setActiveConversationId] = React.useState<string | null>('1');
+  const [conversations, setConversations] = React.useState<Conversation[]>([]);
+  const [activeConversationId, setActiveConversationId] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
+  
+  React.useEffect(() => {
+    if (conversations.length > 0 && !activeConversationId) {
+      setActiveConversationId(conversations[0].id);
+    }
+    if (conversations.length === 0) {
+      setActiveConversationId(null);
+    }
+  }, [conversations, activeConversationId]);
 
   const addMessage = (message: Message) => {
+    if (!activeConversationId) return;
     setConversations(prev =>
       prev.map(conv =>
         conv.id === activeConversationId
@@ -69,7 +68,12 @@ export default function Home() {
   };
 
   const handleSendMessage = async (text: string, file: File | null) => {
-    if (!activeConversationId) return;
+    let currentChatId = activeConversationId;
+    if (!currentChatId) {
+        const newId = createNewChat(true);
+        currentChatId = newId;
+    }
+
     if (!text && !file) return;
 
     setIsLoading(true);
@@ -85,7 +89,14 @@ export default function Home() {
       </div>
     );
     
-    addMessage({ id: Date.now().toString(), role: 'user', content: userMessageContent, text_content: text });
+    // Add message to the correct conversation
+    setConversations(prev =>
+        prev.map(conv =>
+          conv.id === currentChatId
+            ? { ...conv, messages: [...conv.messages, { id: Date.now().toString(), role: 'user', content: userMessageContent, text_content: text }] }
+            : conv
+        )
+      );
 
     try {
       const response = await handleChat(activeConversation?.messages ?? [], text, file);
@@ -96,19 +107,21 @@ export default function Home() {
           title: "Erreur",
           description: response.error,
         });
-        addMessage({
-          id: Date.now().toString() + 'err',
-          role: 'system',
-          content: <p className="text-destructive">{response.error}</p>,
-          text_content: response.error,
-        });
+        setConversations(prev =>
+            prev.map(conv =>
+              conv.id === currentChatId
+                ? { ...conv, messages: [...conv.messages, { id: Date.now().toString() + 'err', role: 'system', content: <p className="text-destructive">{response.error}</p>, text_content: response.error}] }
+                : conv
+            )
+          );
       } else {
-         addMessage({
-            id: Date.now().toString(),
-            role: "assistant",
-            content: response.response,
-            text_content: response.response,
-        });
+        setConversations(prev =>
+            prev.map(conv =>
+              conv.id === currentChatId
+                ? { ...conv, messages: [...conv.messages, { id: Date.now().toString(), role: "assistant", content: response.response, text_content: response.response }] }
+                : conv
+            )
+          );
       }
     } catch (e) {
       const errorMsg = "Une erreur est survenue. Veuillez réessayer.";
@@ -117,56 +130,61 @@ export default function Home() {
         title: "Erreur",
         description: errorMsg,
       });
-      addMessage({
-          id: Date.now().toString() + 'err',
-          role: 'system',
-          content: <p className="text-destructive">{errorMsg}</p>,
-          text_content: errorMsg
-      });
+      setConversations(prev =>
+        prev.map(conv =>
+          conv.id === currentChatId
+            ? { ...conv, messages: [...conv.messages, { id: Date.now().toString() + 'err', role: 'system', content: <p className="text-destructive">{errorMsg}</p>, text_content: errorMsg}] }
+            : conv
+        )
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
-  const createNewChat = () => {
-    const newId = (conversations.length + 1).toString();
+  const createNewChat = (silent = false) => {
+    const newId = Date.now().toString();
     const newConversation: Conversation = {
       id: newId,
-      title: `Nouvelle conversation ${newId}`,
-      messages: [
-        {
-          id: "1",
-          role: "assistant",
-          content: "Bonjour! Prêt à discuter?",
-          text_content: "Bonjour! Prêt à discuter?"
-        }
-      ]
+      title: `Conversation #${conversations.length + 1}`,
+      messages: []
     };
-    setConversations(prev => [...prev, newConversation]);
-    setActiveConversationId(newId);
+    setConversations(prev => [newConversation, ...prev]);
+    if (!silent) {
+        setActiveConversationId(newId);
+    }
+    return newId;
   }
 
   return (
-    <div className="flex h-screen w-full bg-background">
-      <AppSidebar
-        conversations={conversations}
-        activeConversationId={activeConversationId}
-        setActiveConversationId={setActiveConversationId}
-        createNewChat={createNewChat}
-        logo={logo}
-      />
-      <main className="flex flex-1 flex-col">
-        {activeConversation ? (
-          <ChatPanel
-            messages={activeConversation.messages}
-            onSendMessage={handleSendMessage}
-            isLoading={isLoading}
-            onLogoUpload={setLogo}
-          />
-        ) : (
-          <WelcomeScreen />
-        )}
-      </main>
+    <div className="flex flex-col h-screen w-full bg-background overflow-hidden">
+      <AppHeader onLogoUpload={setLogo} />
+      <div className="flex flex-1 overflow-hidden">
+        <AppSidebar
+          conversations={conversations}
+          activeConversationId={activeConversationId}
+          setActiveConversationId={setActiveConversationId}
+          createNewChat={() => createNewChat()}
+        />
+        <main className="flex flex-1 flex-col">
+          {activeConversation ? (
+            <ChatPanel
+              key={activeConversationId}
+              messages={activeConversation.messages}
+              onSendMessage={handleSendMessage}
+              isLoading={isLoading}
+            />
+          ) : (
+            <ChatPanel
+              key="welcome"
+              messages={[]}
+              onSendMessage={handleSendMessage}
+              isLoading={isLoading}
+              isWelcomeMode={true}
+            />
+          )}
+        </main>
+      </div>
     </div>
   );
 }

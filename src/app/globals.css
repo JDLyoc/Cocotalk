@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -9,47 +10,55 @@ body {
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%; /* Shadcn default, good contrast */
-    --card: 280 3% 45%; /* #736e75 */
-    --card-foreground: 0 0% 98%;
+    --foreground: 0 0% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 3.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 3.9%;
-    --primary: 222 53% 36%; /* #2A4D8F */
-    --primary-foreground: 0 0% 100%; /* #FFFFFF */
+    --primary: 222 53% 36%;
+    --primary-foreground: 0 0% 100%;
     --secondary: 45 13% 90%;
     --secondary-foreground: 0 0% 9%;
     --muted: 45 13% 90%;
-    --muted-foreground: 280 3% 45%; /* #736e75 */
-    --accent: 48 98% 50%; /* #fcd306 */
+    --muted-foreground: 280 3% 45%;
+    --accent: 45 93% 47%;
     --accent-foreground: 0 0% 9%;
+    --accent-2: 262 84% 59%;
+    --accent-2-foreground: 0 0% 100%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
     --border: 45 13% 88%;
     --input: 45 13% 88%;
     --ring: 222 53% 36%;
     --radius: 0.5rem;
+    --sidebar: 222 40% 15%;
+    --sidebar-foreground: 0 0% 98%;
   }
  
   .dark {
     --background: 222 40% 15%;
     --foreground: 0 0% 98%;
-    --card: 222 40% 15%;
+    --card: 222 40% 20%;
     --card-foreground: 0 0% 98%;
     --popover: 222 40% 12%;
     --popover-foreground: 0 0% 98%;
-    --primary: 220 48% 60%; /* Lighter blue for dark mode */
+    --primary: 220 48% 60%;
     --primary-foreground: 0 0% 9%;
     --secondary: 222 40% 20%;
     --secondary-foreground: 0 0% 98%;
     --muted: 222 40% 20%;
     --muted-foreground: 280 3% 65%;
-    --accent: 48 98% 50%; /* Gold yellow stays vibrant */
+    --accent: 45 93% 47%;
     --accent-foreground: 0 0% 9%;
+    --accent-2: 262 84% 59%;
+    --accent-2-foreground: 0 0% 100%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
     --border: 222 40% 25%;
     --input: 222 40% 25%;
     --ring: 220 48% 60%;
+    --sidebar: 222 40% 15%;
+    --sidebar-foreground: 0 0% 98%;
   }
 }
 

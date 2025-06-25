@@ -1,25 +1,39 @@
+
 "use client";
 
 import * as React from "react";
-import { Paperclip, Send, Loader2, LayoutDashboard, User, LogOut } from "lucide-react";
+import { Paperclip, Send, Loader2, MessageSquare, Terminal } from "lucide-react";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { ScrollArea } from "./ui/scroll-area";
 import { ChatMessage } from "./chat-message";
 import type { Message } from "@/app/page";
 import { useToast } from "@/hooks/use-toast";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
-import { Dashboard } from "./dashboard";
-import { Avatar, AvatarFallback } from "./ui/avatar";
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
+
 
 interface ChatPanelProps {
   messages: Message[];
   onSendMessage: (text: string, file: File | null) => void;
   isLoading: boolean;
-  onLogoUpload: (base64: string | null) => void;
+  isWelcomeMode?: boolean;
 }
 
-export function ChatPanel({ messages, onSendMessage, isLoading, onLogoUpload }: ChatPanelProps) {
+function WelcomeScreen() {
+    return (
+      <div className="flex h-full flex-col items-center justify-center bg-background text-center p-4">
+        <div className="p-4 rounded-full mb-4">
+          <MessageSquare className="h-16 w-16 text-accent" />
+        </div>
+        <h2 className="text-3xl font-semibold">Commencez une conversation</h2>
+        <p className="text-muted-foreground mt-2 max-w-md">
+          Posez-moi n'importe quelle question ! Je suis là pour vous aider avec des informations, résoudre des problèmes ou simplement discuter.
+        </p>
+      </div>
+    );
+  }
+
+export function ChatPanel({ messages, onSendMessage, isLoading, isWelcomeMode = false }: ChatPanelProps) {
   const [text, setText] = React.useState("");
   const [file, setFile] = React.useState<File | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -69,51 +83,35 @@ export function ChatPanel({ messages, onSendMessage, isLoading, onLogoUpload }: 
   };
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex items-center justify-between border-b p-4">
-        <div className="flex items-center gap-3">
-          <Avatar className="h-9 w-9 border">
-            <AvatarFallback>
-              <User className="h-5 w-5" />
-            </AvatarFallback>
-          </Avatar>
-          <p className="text-sm font-medium text-foreground">utilisateur@exemple.com</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="ghost" size="icon">
-                <LayoutDashboard className="h-5 w-5" />
-                <span className="sr-only">Ouvrir le tableau de bord</span>
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-4xl h-auto max-h-[90vh]">
-              <DialogHeader>
-                <DialogTitle>Tableau de bord</DialogTitle>
-              </DialogHeader>
-              <Dashboard onLogoUpload={onLogoUpload} />
-            </DialogContent>
-          </Dialog>
-          <Button variant="ghost" size="icon" onClick={() => alert("Fonction de déconnexion à implémenter")}>
-            <LogOut className="h-5 w-5" />
-            <span className="sr-only">Se déconnecter</span>
-          </Button>
-        </div>
-      </header>
-      <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
-        <div className="space-y-6">
-          {messages.map((msg) => (
-            <ChatMessage key={msg.id} {...msg} />
-          ))}
-          {isLoading && (
-             <ChatMessage id="loading" role="assistant" content={<div className="flex items-center gap-2"><Loader2 className="h-5 w-5 animate-spin" /><span>L'assistant réfléchit...</span></div>} />
-          )}
-        </div>
-      </ScrollArea>
-      <div className="border-t p-4">
+    <div className="flex h-full flex-col relative">
+      <div className="flex-1 relative">
+        <ScrollArea className="absolute inset-0 p-4" ref={scrollAreaRef}>
+          {isWelcomeMode && messages.length === 0 && <WelcomeScreen />}
+          <div className="space-y-6">
+            {messages.map((msg) => (
+              <ChatMessage key={msg.id} {...msg} />
+            ))}
+            {isLoading && (
+               <ChatMessage id="loading" role="assistant" content={<div className="flex items-center gap-2"><Loader2 className="h-5 w-5 animate-spin" /><span>L'assistant réfléchit...</span></div>} />
+            )}
+          </div>
+        </ScrollArea>
+      </div>
+      
+      <div className="absolute bottom-24 right-4 w-full max-w-sm z-10">
+        <Alert variant="destructive" className="shadow-lg">
+            <Terminal className="h-4 w-4" />
+            <AlertTitle className="font-bold">Compte non actif</AlertTitle>
+            <AlertDescription>
+            Votre compte est en attente de validation pour créer un nouveau chat.
+            </AlertDescription>
+        </Alert>
+      </div>
+
+      <div className="border-t p-4 bg-background">
         <div className="relative rounded-lg border bg-card">
           <Textarea
-            placeholder="Écrivez votre message ici..."
+            placeholder="Tapez votre message..."
             className="pr-20 border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
             value={text}
             onChange={(e) => setText(e.target.value)}

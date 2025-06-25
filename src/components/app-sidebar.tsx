@@ -1,18 +1,18 @@
+
 "use client";
 
-import Image from "next/image";
-import { MessageSquare, Plus, Bot } from "lucide-react";
+import { MessageSquare, Plus, Sparkles } from "lucide-react";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import type { Conversation } from "@/app/page";
 import { cn } from "@/lib/utils";
+import { Avatar, AvatarFallback } from "./ui/avatar";
 
 interface AppSidebarProps {
   conversations: Conversation[];
   activeConversationId: string | null;
   setActiveConversationId: (id: string | null) => void;
   createNewChat: () => void;
-  logo: string | null;
 }
 
 export function AppSidebar({
@@ -20,49 +20,50 @@ export function AppSidebar({
   activeConversationId,
   setActiveConversationId,
   createNewChat,
-  logo,
 }: AppSidebarProps) {
   return (
-    <aside className="flex h-full w-full max-w-xs flex-col bg-card text-card-foreground p-4 border-r">
-      <div className="flex items-center justify-center pt-2 pb-4 mb-2">
-        <div className="p-1 rounded-lg">
-          {logo ? (
-            <Image
-              src={logo}
-              alt="Custom user logo"
-              width={80}
-              height={80}
-              className="object-contain"
-            />
-          ) : (
-            <Bot className="h-20 w-20 text-primary" />
-          )}
-        </div>
+    <aside className="flex h-full w-full max-w-[280px] flex-col bg-sidebar text-sidebar-foreground p-4">
+      <div className="space-y-2 mb-4">
+        <Button size="lg" className="w-full justify-center font-semibold bg-accent text-accent-foreground hover:bg-accent/90 rounded-lg" onClick={createNewChat}>
+          <Plus className="mr-2 h-4 w-4" />
+          Nouveau Chat
+        </Button>
+        <Button size="lg" variant="ghost" className="w-full justify-center font-semibold bg-accent-2 text-accent-2-foreground hover:bg-accent-2/90 rounded-lg">
+            <Sparkles className="mr-2 h-4 w-4" />
+            AI Content Generator
+        </Button>
       </div>
 
-      <Button variant="outline" className="mb-4 w-full justify-start" onClick={createNewChat}>
-        <Plus className="mr-2 h-4 w-4" />
-        Nouvelle Conversation
-      </Button>
+      <h3 className="px-2 pt-4 pb-2 text-xs font-semibold uppercase text-muted-foreground/80 tracking-wider">
+        Conversations Récentes
+      </h3>
 
       <ScrollArea className="flex-1 -mx-4">
-        <div className="px-4 space-y-2">
+        <div className="px-4 space-y-1">
           {conversations.map((conv) => (
             <Button
               key={conv.id}
               variant={conv.id === activeConversationId ? "secondary" : "ghost"}
               className={cn(
-                "w-full justify-start",
-                conv.id === activeConversationId && "bg-primary/10 text-primary"
+                "w-full justify-start font-normal",
+                conv.id === activeConversationId ? "bg-black/20 text-white" : "hover:bg-white/5"
               )}
               onClick={() => setActiveConversationId(conv.id)}
             >
-              <MessageSquare className="mr-2 h-4 w-4" />
+              <MessageSquare className="mr-2 h-4 w-4 flex-shrink-0" />
               <span className="truncate">{conv.title}</span>
             </Button>
           ))}
         </div>
       </ScrollArea>
+      <div className="mt-auto border-t border-sidebar-foreground/10 -mx-4 pt-4 px-4">
+        <Button variant="ghost" className="w-full justify-start hover:bg-white/5">
+            <Avatar className="h-8 w-8 mr-3">
+                <AvatarFallback className="bg-primary text-primary-foreground">N</AvatarFallback>
+            </Avatar>
+            <span className="font-medium">Mon Compte</span>
+        </Button>
+      </div>
     </aside>
   );
 }
