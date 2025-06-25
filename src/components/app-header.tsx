@@ -1,7 +1,7 @@
 
 "use client";
 
-import { LayoutGrid, Radio } from "lucide-react";
+import { LayoutGrid } from "lucide-react";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
 import { Dashboard } from "./dashboard";
@@ -9,54 +9,7 @@ import { Avatar, AvatarFallback } from "./ui/avatar";
 import Image from "next/image";
 import * as React from "react";
 
-interface AppHeaderProps {
-    logo: string | null;
-    onLogoUpload: (base64: string | null) => void;
-}
-
-interface LogoProps {
-    logo: string | null;
-}
-
-function Logo({ logo }: LogoProps) {
-    const [isClient, setIsClient] = React.useState(false);
-
-    React.useEffect(() => {
-        setIsClient(true);
-    }, []);
-
-    if (!isClient) {
-        // Affiche un placeholder de la bonne taille sur le serveur et au premier rendu client.
-        // Cela empêche le "flash" du logo par défaut et le décalage de la mise en page.
-        return <div className="h-14 w-44" />;
-    }
-
-    if (logo) {
-        return (
-            <div className="flex items-center gap-2 h-14 bg-transparent">
-                <Image
-                    src={logo}
-                    alt="Uploaded Logo"
-                    width={140}
-                    height={56}
-                    className="object-contain h-full w-auto bg-transparent"
-                    style={{backgroundColor: 'transparent'}}
-                />
-            </div>
-        )
-    }
-
-    return (
-        <div className="flex items-center gap-2 h-14">
-            <Radio className="h-8 w-8 text-accent" />
-            <span className="text-2xl font-bold text-primary">
-                CocoTalk
-            </span>
-        </div>
-    )
-}
-
-export function AppHeader({ logo, onLogoUpload }: AppHeaderProps) {
+export function AppHeader() {
   const userEmail = "contentredac@gmail.com";
   const getInitials = (email: string) => {
       const namePart = email.split('@')[0];
@@ -67,7 +20,17 @@ export function AppHeader({ logo, onLogoUpload }: AppHeaderProps) {
   return (
     <header className="flex h-16 items-center justify-between border-b bg-background px-4 md:px-6 z-10">
       <div className="flex items-center gap-6">
-        <Logo logo={logo} />
+        <div className="flex items-center gap-2 h-14 bg-transparent">
+            <Image
+                src="https://placehold.co/140x56.png"
+                alt="CocoTalk Logo"
+                width={140}
+                height={56}
+                className="object-contain h-full w-auto bg-transparent"
+                style={{backgroundColor: 'transparent'}}
+                data-ai-hint="logo"
+            />
+        </div>
       </div>
       
       <div className="flex items-center gap-4">
@@ -82,7 +45,7 @@ export function AppHeader({ logo, onLogoUpload }: AppHeaderProps) {
             <DialogHeader>
               <DialogTitle>Tableau de bord</DialogTitle>
             </DialogHeader>
-            <Dashboard onLogoUpload={onLogoUpload} />
+            <Dashboard />
           </DialogContent>
         </Dialog>
 

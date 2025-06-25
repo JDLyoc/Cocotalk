@@ -1,11 +1,10 @@
+
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Bot, MessageSquare, Users, Image as ImageIcon } from "lucide-react";
+import { Bot, MessageSquare, Users } from "lucide-react";
 import { ScrollArea } from "./ui/scroll-area";
-import { LogoUploader } from "./logo-uploader";
-import { Button } from "./ui/button";
 
 
 const activityData = [
@@ -18,15 +17,11 @@ const activityData = [
   { date: 'Dimanche', conversations: 4 },
 ];
 
-interface DashboardProps {
-  onLogoUpload: (base64: string | null) => void;
-}
-
-export function Dashboard({ onLogoUpload }: DashboardProps) {
+export function Dashboard() {
   return (
       <ScrollArea className="flex-1 py-4">
         <div className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Conversations totales</CardTitle>
@@ -55,19 +50,6 @@ export function Dashboard({ onLogoUpload }: DashboardProps) {
               <CardContent>
                 <div className="text-2xl font-bold">Gemini 2.0</div>
                 <p className="text-xs text-muted-foreground">Flash</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Personnaliser</CardTitle>
-                <ImageIcon className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <LogoUploader onLogoUpload={onLogoUpload}>
-                    <Button variant="outline" className="w-full">
-                        Changer le logo
-                    </Button>
-                </LogoUploader>
               </CardContent>
             </Card>
           </div>

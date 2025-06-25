@@ -6,8 +6,6 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { ChatPanel } from "@/components/chat-panel";
 import { handleChat } from "@/lib/actions";
 import { useToast } from "@/hooks/use-toast";
-import { MessageSquare } from "lucide-react";
-import { useLocalStorage } from "@/hooks/use-local-storage";
 import { AppHeader } from "@/components/app-header";
 
 export interface Message {
@@ -23,24 +21,9 @@ export interface Conversation {
   messages: Message[];
 }
 
-function WelcomeScreen() {
-  return (
-    <div className="flex h-full flex-col items-center justify-center bg-background text-center p-4">
-      <div className="p-4 rounded-full mb-4">
-        <MessageSquare className="h-16 w-16 text-accent" />
-      </div>
-      <h2 className="text-3xl font-semibold">Commencez une conversation</h2>
-      <p className="text-muted-foreground mt-2 max-w-md">
-        Posez-moi n'importe quelle question ! Je suis là pour vous aider avec des informations, résoudre des problèmes ou simplement discuter.
-      </p>
-    </div>
-  );
-}
-
 export default function Home() {
   const { toast } = useToast();
-  const [logo, setLogo] = useLocalStorage<string | null>('app-logo', null);
-
+  
   const [conversations, setConversations] = React.useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
@@ -158,7 +141,7 @@ export default function Home() {
 
   return (
     <div className="flex flex-col h-screen w-full bg-background overflow-hidden">
-      <AppHeader logo={logo} onLogoUpload={setLogo} />
+      <AppHeader />
       <div className="flex flex-1 overflow-hidden">
         <AppSidebar
           conversations={conversations}
