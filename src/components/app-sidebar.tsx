@@ -83,64 +83,66 @@ export function AppSidebar({
           Conversations Récentes
         </h3>
 
-        <ScrollArea className="flex-1 -mx-4">
-          <div className="px-4 space-y-1">
-            {conversations.map((conv) => (
-              <AlertDialog key={conv.id}>
-                <div className="group relative flex items-center w-full">
-                  <Button
-                    variant={conv.id === activeConversationId ? "secondary" : "ghost"}
-                    className="w-full justify-start font-normal rounded-lg pr-10"
-                    onClick={() => setActiveConversationId(conv.id)}
-                  >
-                    <MessageSquare className="mr-2 h-4 w-4 flex-shrink-0" />
-                    <span className="truncate">{conv.title}</span>
-                  </Button>
-                  <div className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreHorizontal className="h-4 w-4" />
-                          <span className="sr-only">Options</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent side="right">
-                        <DropdownMenuItem onSelect={() => handleRenameClick(conv)}>
-                          <Edit className="mr-2 h-4 w-4" />
-                          <span>Renommer</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <AlertDialogTrigger asChild>
-                          <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10">
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            <span>Supprimer</span>
-                          </DropdownMenuItem>
-                        </AlertDialogTrigger>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Êtes-vous sûr(e) ?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Cette action est irréversible et supprimera définitivement la conversation "{conv.title}".
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Annuler</AlertDialogCancel>
-                    <AlertDialogAction
-                      className={cn(buttonVariants({ variant: "destructive" }))}
-                      onClick={() => onDeleteConversation(conv.id)}
+        <div className="flex-1 bg-white rounded-lg my-2 overflow-hidden">
+          <ScrollArea className="h-full w-full">
+            <div className="p-2 space-y-1">
+              {conversations.map((conv) => (
+                <AlertDialog key={conv.id}>
+                  <div className="group relative flex items-center w-full">
+                    <Button
+                      variant={conv.id === activeConversationId ? "secondary" : "ghost"}
+                      className="w-full justify-start font-normal rounded-lg pr-10"
+                      onClick={() => setActiveConversationId(conv.id)}
                     >
-                      Supprimer
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            ))}
-          </div>
-        </ScrollArea>
+                      <MessageSquare className="mr-2 h-4 w-4 flex-shrink-0" />
+                      <span className="truncate">{conv.title}</span>
+                    </Button>
+                    <div className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">Options</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent side="right">
+                          <DropdownMenuItem onSelect={() => handleRenameClick(conv)}>
+                            <Edit className="mr-2 h-4 w-4" />
+                            <span>Renommer</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <AlertDialogTrigger asChild>
+                            <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              <span>Supprimer</span>
+                            </DropdownMenuItem>
+                          </AlertDialogTrigger>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Êtes-vous sûr(e) ?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Cette action est irréversible et supprimera définitivement la conversation "{conv.title}".
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Annuler</AlertDialogCancel>
+                      <AlertDialogAction
+                        className={cn(buttonVariants({ variant: "destructive" }))}
+                        onClick={() => onDeleteConversation(conv.id)}
+                      >
+                        Supprimer
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              ))}
+            </div>
+          </ScrollArea>
+        </div>
         <div className="mt-auto border-t -mx-4 p-4 bg-[#3C63A6]">
           <Button variant="ghost" className="w-full justify-start rounded-lg text-white hover:bg-white/20 hover:text-white" onClick={() => alert("Fonction de déconnexion à implémenter")}>
               <LogOut className="mr-3 h-5 w-5" />
