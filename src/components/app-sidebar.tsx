@@ -1,12 +1,10 @@
-
 "use client";
 
-import { MessageSquare, Plus, Sparkles } from "lucide-react";
+import { LogOut, MessageSquare, Plus, Sparkles } from "lucide-react";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import type { Conversation } from "@/app/page";
 import { cn } from "@/lib/utils";
-import { Avatar, AvatarFallback } from "./ui/avatar";
 
 interface AppSidebarProps {
   conversations: Conversation[];
@@ -57,11 +55,9 @@ export function AppSidebar({
         </div>
       </ScrollArea>
       <div className="mt-auto border-t border-sidebar-foreground/10 -mx-4 pt-4 px-4">
-        <Button variant="ghost" className="w-full justify-start hover:bg-white/5">
-            <Avatar className="h-8 w-8 mr-3">
-                <AvatarFallback className="bg-primary text-primary-foreground">N</AvatarFallback>
-            </Avatar>
-            <span className="font-medium">Mon Compte</span>
+        <Button variant="ghost" className="w-full justify-start hover:bg-white/5" onClick={() => alert("Fonction de déconnexion à implémenter")}>
+            <LogOut className="mr-3 h-5 w-5" />
+            <span className="font-medium">Se déconnecter</span>
         </Button>
       </div>
     </aside>
