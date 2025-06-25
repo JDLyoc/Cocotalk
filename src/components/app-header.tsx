@@ -7,7 +7,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Dashboard } from "./dashboard";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import Image from "next/image";
-import { Skeleton } from "./ui/skeleton";
 import * as React from "react";
 
 interface AppHeaderProps {
@@ -27,7 +26,9 @@ function Logo({ logo }: LogoProps) {
     }, []);
 
     if (!isClient) {
-        return <Skeleton className="h-14 w-44" />;
+        // Affiche un placeholder de la bonne taille sur le serveur et au premier rendu client.
+        // Cela empêche le "flash" du logo par défaut et le décalage de la mise en page.
+        return <div className="h-14 w-44" />;
     }
 
     if (logo) {
