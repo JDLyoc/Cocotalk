@@ -3,7 +3,6 @@
 import * as React from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ChatPanel } from "@/components/chat-panel";
-import { useLocalStorage } from "@/hooks/use-local-storage";
 import { handleChat } from "@/lib/actions";
 import { useToast } from "@/hooks/use-toast";
 
@@ -21,7 +20,6 @@ export interface Conversation {
 }
 
 export default function Home() {
-  const [logo, setLogo] = useLocalStorage<string | null>("app-logo", null);
   const { toast } = useToast();
 
   const [conversations, setConversations] = React.useState<Conversation[]>([
@@ -133,8 +131,6 @@ export default function Home() {
   return (
     <div className="flex h-screen w-full bg-background">
       <AppSidebar
-        logo={logo}
-        setLogo={setLogo}
         conversations={conversations}
         activeConversationId={activeConversationId}
         setActiveConversationId={setActiveConversationId}

@@ -1,16 +1,12 @@
 "use client";
 
-import { MessageSquare, Plus, Bot, Upload } from "lucide-react";
-import Image from "next/image";
+import { MessageSquare, Plus, Bot } from "lucide-react";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import type { Conversation } from "@/app/page";
 import { cn } from "@/lib/utils";
-import { LogoUploader } from "./logo-uploader";
 
 interface AppSidebarProps {
-  logo: string | null;
-  setLogo: (logo: string | null) => void;
   conversations: Conversation[];
   activeConversationId: string;
   setActiveConversationId: (id: string) => void;
@@ -18,29 +14,17 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({
-  logo,
-  setLogo,
   conversations,
   activeConversationId,
   setActiveConversationId,
   createNewChat,
 }: AppSidebarProps) {
   return (
-    <aside className="flex h-full w-full max-w-xs flex-col bg-card text-card-foreground py-2 px-4 border-r">
-      <div className="flex items-center justify-center gap-3 pb-2 border-b mb-2">
-        {logo ? (
-          <Image
-            src={logo}
-            alt="App logo"
-            width={80}
-            height={80}
-            className="rounded-md object-contain"
-          />
-        ) : (
-          <div className="bg-accent p-4 rounded-lg">
-            <Bot className="h-10 w-10 text-accent-foreground" />
-          </div>
-        )}
+    <aside className="flex h-full w-full max-w-xs flex-col bg-card text-card-foreground p-4 border-r">
+      <div className="flex items-center justify-center gap-3 pb-4 border-b mb-4">
+        <div className="bg-accent p-4 rounded-lg">
+          <Bot className="h-10 w-10 text-accent-foreground" />
+        </div>
       </div>
 
       <Button variant="outline" className="mb-4" onClick={createNewChat}>
@@ -66,15 +50,6 @@ export function AppSidebar({
           ))}
         </div>
       </ScrollArea>
-
-      <div className="mt-4 pt-4 border-t">
-        <LogoUploader onLogoUpload={setLogo}>
-          <Button variant="ghost" className="w-full justify-start">
-            <Upload className="mr-2 h-4 w-4" />
-            Changer le logo
-          </Button>
-        </LogoUploader>
-      </div>
     </aside>
   );
 }
