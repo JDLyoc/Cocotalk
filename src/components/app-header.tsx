@@ -1,17 +1,31 @@
 
 "use client";
 
-import { LayoutGrid, LogOut } from "lucide-react";
+import { LayoutGrid } from "lucide-react";
 import { Button } from "./ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "./ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
 import { Dashboard } from "./dashboard";
 import { Avatar, AvatarFallback } from "./ui/avatar";
+import Image from "next/image";
 
 interface AppHeaderProps {
+    logo: string | null;
     onLogoUpload: (base64: string | null) => void;
 }
 
-function Logo() {
+interface LogoProps {
+    logo: string | null;
+}
+
+function Logo({ logo }: LogoProps) {
+    if (logo) {
+        return (
+            <div className="flex items-center gap-2 h-8">
+                <Image src={logo} alt="Uploaded Logo" width={140} height={32} className="object-contain h-full w-auto" />
+            </div>
+        )
+    }
+
     return (
         <div className="flex items-center gap-2 text-lg font-bold tracking-tight">
             <div className="flex flex-col items-start leading-tight">
@@ -22,7 +36,7 @@ function Logo() {
     )
 }
 
-export function AppHeader({ onLogoUpload }: AppHeaderProps) {
+export function AppHeader({ logo, onLogoUpload }: AppHeaderProps) {
   const userEmail = "contentredac@gmail.com";
   const getInitials = (email: string) => {
       const namePart = email.split('@')[0];
@@ -33,7 +47,7 @@ export function AppHeader({ onLogoUpload }: AppHeaderProps) {
   return (
     <header className="flex h-16 items-center justify-between border-b bg-background px-4 md:px-6 z-10">
       <div className="flex items-center gap-6">
-        <Logo />
+        <Logo logo={logo} />
       </div>
       
       <div className="flex items-center gap-4">
