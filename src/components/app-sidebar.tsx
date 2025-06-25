@@ -1,6 +1,6 @@
 "use client";
 
-import { LogOut, MessageSquare, Plus, Sparkles } from "lucide-react";
+import { LogOut, MessageSquare, Plus } from "lucide-react";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import type { Conversation } from "@/app/page";
@@ -25,10 +25,6 @@ export function AppSidebar({
         <Button size="lg" className="w-full justify-center font-semibold bg-accent text-accent-foreground hover:bg-accent/90 rounded-lg" onClick={createNewChat}>
           <Plus className="mr-2 h-4 w-4" />
           Nouveau Chat
-        </Button>
-        <Button size="lg" variant="ghost" className="w-full justify-center font-semibold bg-accent-2 text-accent-2-foreground hover:bg-accent hover:text-accent-foreground rounded-lg">
-            <Sparkles className="mr-2 h-4 w-4" />
-            AI Content Generator
         </Button>
       </div>
 
