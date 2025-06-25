@@ -1,14 +1,15 @@
 "use client";
 
 import * as React from "react";
-import { Paperclip, Send, FileText, Image as ImageIcon, Loader2 } from "lucide-react";
+import { Paperclip, Send, Loader2, LayoutDashboard } from "lucide-react";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { ScrollArea } from "./ui/scroll-area";
 import { ChatMessage } from "./chat-message";
 import type { Message } from "@/app/page";
-import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { useToast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
+import { Dashboard } from "./dashboard";
 
 interface ChatPanelProps {
   messages: Message[];
@@ -70,6 +71,20 @@ export function ChatPanel({ messages, onSendMessage, isLoading, title }: ChatPan
     <div className="flex h-full flex-col">
       <header className="flex items-center justify-between border-b p-4">
         <h2 className="text-xl font-semibold">{title}</h2>
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button variant="ghost" size="icon">
+              <LayoutDashboard className="h-5 w-5" />
+              <span className="sr-only">Ouvrir le tableau de bord</span>
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-4xl h-auto max-h-[90vh]">
+            <DialogHeader>
+              <DialogTitle>Tableau de bord</DialogTitle>
+            </DialogHeader>
+            <Dashboard />
+          </DialogContent>
+        </Dialog>
       </header>
       <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
         <div className="space-y-6">

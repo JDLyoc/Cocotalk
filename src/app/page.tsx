@@ -5,7 +5,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { ChatPanel } from "@/components/chat-panel";
 import { handleChat } from "@/lib/actions";
 import { useToast } from "@/hooks/use-toast";
-import { Dashboard } from "@/components/dashboard";
+import { Bot } from "lucide-react";
 
 export interface Message {
   id: string;
@@ -18,6 +18,20 @@ export interface Conversation {
   id: string;
   title: string;
   messages: Message[];
+}
+
+function WelcomeScreen() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center bg-background text-center">
+      <div className="bg-primary/10 p-4 rounded-full mb-4">
+        <Bot className="h-12 w-12 text-primary" />
+      </div>
+      <h2 className="text-2xl font-semibold">Bienvenue !</h2>
+      <p className="text-muted-foreground mt-2">
+        Sélectionnez une conversation ou démarrez-en une nouvelle pour commencer.
+      </p>
+    </div>
+  );
 }
 
 export default function Home() {
@@ -37,7 +51,7 @@ export default function Home() {
       ],
     },
   ]);
-  const [activeConversationId, setActiveConversationId] = React.useState<string | null>(null);
+  const [activeConversationId, setActiveConversationId] = React.useState<string | null>('1');
   const [isLoading, setIsLoading] = React.useState(false);
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
@@ -147,7 +161,7 @@ export default function Home() {
             title={activeConversation.title}
           />
         ) : (
-          <Dashboard />
+          <WelcomeScreen />
         )}
       </main>
     </div>

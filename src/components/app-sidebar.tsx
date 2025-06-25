@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutDashboard, MessageSquare, Plus, Bot } from "lucide-react";
+import { MessageSquare, Plus, Bot } from "lucide-react";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import type { Conversation } from "@/app/page";
@@ -26,15 +26,6 @@ export function AppSidebar({
           <Bot className="h-10 w-10 text-primary" />
         </div>
       </div>
-
-      <Button
-        variant={!activeConversationId ? "secondary" : "ghost"}
-        className="mb-2 w-full justify-start"
-        onClick={() => setActiveConversationId(null)}
-      >
-        <LayoutDashboard className="mr-2 h-4 w-4" />
-        Tableau de bord
-      </Button>
 
       <Button variant="outline" className="mb-4 w-full justify-start" onClick={createNewChat}>
         <Plus className="mr-2 h-4 w-4" />

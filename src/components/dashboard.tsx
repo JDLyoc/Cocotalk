@@ -17,11 +17,7 @@ const activityData = [
 
 export function Dashboard() {
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex items-center border-b p-4">
-        <h2 className="text-xl font-semibold">Tableau de bord</h2>
-      </header>
-      <ScrollArea className="flex-1 p-4 md:p-6">
+      <ScrollArea className="flex-1 py-4">
         <div className="space-y-6">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <Card>
@@ -83,6 +79,5 @@ export function Dashboard() {
           </div>
         </div>
       </ScrollArea>
-    </div>
   );
 }
