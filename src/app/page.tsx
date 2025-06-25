@@ -39,7 +39,7 @@ function WelcomeScreen() {
 
 export default function Home() {
   const { toast } = useToast();
-  const [logo, setLogo, isLogoLoading] = useLocalStorage<string | null>('app-logo', null);
+  const [logo, setLogo] = useLocalStorage<string | null>('app-logo', null);
 
   const [conversations, setConversations] = React.useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = React.useState<string | null>(null);
@@ -158,7 +158,7 @@ export default function Home() {
 
   return (
     <div className="flex flex-col h-screen w-full bg-background overflow-hidden">
-      <AppHeader logo={logo} onLogoUpload={setLogo} isLoading={isLogoLoading} />
+      <AppHeader logo={logo} onLogoUpload={setLogo} />
       <div className="flex flex-1 overflow-hidden">
         <AppSidebar
           conversations={conversations}

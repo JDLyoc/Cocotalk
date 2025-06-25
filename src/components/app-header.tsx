@@ -13,16 +13,20 @@ import * as React from "react";
 interface AppHeaderProps {
     logo: string | null;
     onLogoUpload: (base64: string | null) => void;
-    isLoading: boolean;
 }
 
 interface LogoProps {
     logo: string | null;
-    isLoading: boolean;
 }
 
-function Logo({ logo, isLoading }: LogoProps) {
-    if (isLoading) {
+function Logo({ logo }: LogoProps) {
+    const [isClient, setIsClient] = React.useState(false);
+
+    React.useEffect(() => {
+        setIsClient(true);
+    }, []);
+
+    if (!isClient) {
         return <Skeleton className="h-14 w-44" />;
     }
 
@@ -35,6 +39,7 @@ function Logo({ logo, isLoading }: LogoProps) {
                     width={140}
                     height={56}
                     className="object-contain h-full w-auto bg-transparent"
+                    style={{backgroundColor: 'transparent'}}
                 />
             </div>
         )
@@ -50,7 +55,7 @@ function Logo({ logo, isLoading }: LogoProps) {
     )
 }
 
-export function AppHeader({ logo, onLogoUpload, isLoading }: AppHeaderProps) {
+export function AppHeader({ logo, onLogoUpload }: AppHeaderProps) {
   const userEmail = "contentredac@gmail.com";
   const getInitials = (email: string) => {
       const namePart = email.split('@')[0];
@@ -61,7 +66,7 @@ export function AppHeader({ logo, onLogoUpload, isLoading }: AppHeaderProps) {
   return (
     <header className="flex h-16 items-center justify-between border-b bg-background px-4 md:px-6 z-10">
       <div className="flex items-center gap-6">
-        <Logo logo={logo} isLoading={isLoading} />
+        <Logo logo={logo} />
       </div>
       
       <div className="flex items-center gap-4">

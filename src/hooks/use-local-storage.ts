@@ -2,9 +2,8 @@
 
 import { useState, useEffect } from 'react';
 
-export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T | ((val: T) => T)) => void, boolean] {
+export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T | ((val: T) => T)) => void] {
   const [storedValue, setStoredValue] = useState<T>(initialValue);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     try {
@@ -14,8 +13,6 @@ export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T 
       }
     } catch (error) {
       console.log(error);
-    } finally {
-      setLoading(false);
     }
   }, [key]);
 
@@ -53,5 +50,5 @@ export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T 
     };
   }, [key, initialValue]);
 
-  return [storedValue, setValue, loading];
+  return [storedValue, setValue];
 }
