@@ -1,6 +1,6 @@
 "use client";
 
-import { LogOut, MessageSquare, Plus } from "lucide-react";
+import { Bot, LogOut, MessageSquare, Plus } from "lucide-react";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import type { Conversation } from "@/app/page";
@@ -25,6 +25,10 @@ export function AppSidebar({
         <Button size="lg" className="w-full justify-center font-semibold bg-accent text-accent-foreground hover:bg-accent/90 rounded-lg" onClick={createNewChat}>
           <Plus className="mr-2 h-4 w-4" />
           Nouveau Chat
+        </Button>
+        <Button size="lg" variant="outline" className="w-full justify-center font-semibold bg-violet text-white hover:bg-violet/90 border-violet rounded-lg" onClick={() => alert("Fonctionnalité à implémenter")}>
+            <Bot className="mr-2 h-4 w-4" />
+            AI Content Generator
         </Button>
       </div>
 

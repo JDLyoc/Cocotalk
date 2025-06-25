@@ -28,8 +28,9 @@ body {
     --border: 45 13% 88%;
     --input: 45 13% 88%;
     --ring: 222 53% 36%;
-    --sidebar: 280 2% 45%; /* #736e75 */
+    --sidebar: 240 10% 3.9%;
     --sidebar-foreground: 0 0% 98%;
+    --violet: 262 83% 58%;
   }
  
   .dark {
@@ -52,8 +53,9 @@ body {
     --border: 222 40% 25%;
     --input: 222 40% 25%;
     --ring: 220 48% 60%;
-    --sidebar: 280 2% 45%; /* #736e75 */
+    --sidebar: 240 10% 3.9%;
     --sidebar-foreground: 0 0% 98%;
+    --violet: 262 83% 58%;
   }
 }
 
