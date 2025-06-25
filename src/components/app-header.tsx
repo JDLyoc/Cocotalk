@@ -60,11 +60,11 @@ export function AppHeader({ onLogoUpload }: AppHeaderProps) {
                     </Avatar>
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-                <DialogHeader>
+            <DialogContent className="sm:max-w-md p-0 gap-0">
+                <DialogHeader className="bg-accent text-white p-4 rounded-t-lg">
                     <DialogTitle>Profil Utilisateur</DialogTitle>
                 </DialogHeader>
-                <div className="py-4">
+                <div className="p-6">
                     <div className="flex items-center gap-4">
                         <span className="text-sm font-medium text-muted-foreground">Email:</span>
                         <span className="text-sm font-semibold">{userEmail}</span>
