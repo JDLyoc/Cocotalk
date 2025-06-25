@@ -3,8 +3,9 @@
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Bot, MessageSquare, Users } from "lucide-react";
+import { Bot, ImageIcon, MessageSquare, Users } from "lucide-react";
 import { ScrollArea } from "./ui/scroll-area";
+import { LogoUploaderFirebase } from "./logo-uploader-firebase";
 
 
 const activityData = [
@@ -53,7 +54,7 @@ export function Dashboard() {
               </CardContent>
             </Card>
           </div>
-          <div>
+          <div className="grid gap-4 md:grid-cols-2">
             <Card>
               <CardHeader>
                 <CardTitle>Activité hebdomadaire</CardTitle>
@@ -76,6 +77,20 @@ export function Dashboard() {
                           <Bar dataKey="conversations" name="Conversations" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                       </BarChart>
                   </ResponsiveContainer>
+              </CardContent>
+            </Card>
+             <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <ImageIcon className="h-5 w-5" />
+                    Personnalisation du Logo
+                </CardTitle>
+                <CardDescription>
+                    Téléversez le logo de votre entreprise. Il sera visible par tous les utilisateurs.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <LogoUploaderFirebase />
               </CardContent>
             </Card>
           </div>
