@@ -32,8 +32,8 @@ function Logo({ logo }: LogoProps) {
 
     if (logo) {
         return (
-            <div className="flex items-center gap-2 h-8">
-                <Image src={logo} alt="Uploaded Logo" width={140} height={32} className="object-contain h-full w-auto" style={{ backgroundColor: 'transparent' }} />
+            <div className="flex items-center gap-2 h-8 bg-transparent">
+                <Image src={logo} alt="Uploaded Logo" width={140} height={32} className="object-contain h-full w-auto bg-transparent" />
             </div>
         )
     }
