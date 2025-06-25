@@ -57,7 +57,7 @@ export function LogoUploader({ children, onLogoUpload }: LogoUploaderProps) {
   };
 
   return (
-    <Dialog onOpenChange={() => { setPreview(null); setFile(null); }}>
+    <Dialog onOpenChange={(open) => { if (!open) { setPreview(null); setFile(null); }}}>
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent>
         <DialogHeader>
@@ -93,9 +93,11 @@ export function LogoUploader({ children, onLogoUpload }: LogoUploaderProps) {
           )}
         </div>
         <DialogFooter>
-            <Button variant="destructive" onClick={handleRemove}>
-                Supprimer le logo actuel
-            </Button>
+            <DialogClose asChild>
+              <Button variant="destructive" onClick={handleRemove}>
+                  Supprimer le logo actuel
+              </Button>
+            </DialogClose>
             <DialogClose asChild>
                 <Button onClick={handleSave} disabled={!file}>Sauvegarder</Button>
             </DialogClose>
