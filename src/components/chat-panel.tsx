@@ -40,7 +40,8 @@ function WelcomeScreen() {
 export function ChatPanel({ messages, onSendMessage, isLoading, isWelcomeMode = false }: ChatPanelProps) {
   const [text, setText] = React.useState("");
   const [file, setFile] = React.useState<File | null>(null);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const docFileInputRef = React.useRef<HTMLInputElement>(null);
+  const imageFileInputRef = React.useRef<HTMLInputElement>(null);
   const scrollAreaRef = React.useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -59,8 +60,11 @@ export function ChatPanel({ messages, onSendMessage, isLoading, isWelcomeMode = 
     onSendMessage(text, file);
     setText("");
     setFile(null);
-    if(fileInputRef.current) {
-      fileInputRef.current.value = "";
+    if(docFileInputRef.current) {
+      docFileInputRef.current.value = "";
+    }
+    if(imageFileInputRef.current) {
+        imageFileInputRef.current.value = "";
     }
   };
 
@@ -96,6 +100,9 @@ export function ChatPanel({ messages, onSendMessage, isLoading, isWelcomeMode = 
     }
   };
 
+  const docTypes = "text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  const imageTypes = "image/jpeg,image/png,image/webp,image/gif";
+
   return (
     <div className="flex h-full flex-col relative">
       <div className="flex-1 relative">
@@ -123,7 +130,8 @@ export function ChatPanel({ messages, onSendMessage, isLoading, isWelcomeMode = 
             rows={1}
           />
           <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-             <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/jpeg,image/png,image/webp,image/gif,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+            <input type="file" ref={docFileInputRef} onChange={handleFileChange} className="hidden" accept={docTypes} />
+            <input type="file" ref={imageFileInputRef} onChange={handleFileChange} className="hidden" accept={imageTypes} />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -136,11 +144,11 @@ export function ChatPanel({ messages, onSendMessage, isLoading, isWelcomeMode = 
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent side="top" align="end">
-                <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
+                <DropdownMenuItem onClick={() => docFileInputRef.current?.click()}>
                   <FileUp className="mr-2 h-4 w-4" />
                   <span>Ajouter des fichiers</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
+                <DropdownMenuItem onClick={() => imageFileInputRef.current?.click()}>
                   <ScanSearch className="mr-2 h-4 w-4" />
                   <span>Analyser une image</span>
                 </DropdownMenuItem>
