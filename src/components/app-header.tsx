@@ -44,15 +44,15 @@ export function AppHeader() {
   return (
     <header className="flex h-16 items-center justify-between border-b bg-background px-4 md:px-6 z-10">
       <div className="flex items-center gap-6">
-        <div className="flex items-center gap-2 h-14 w-[140px]">
+        <div className="flex items-center gap-2 h-14 w-[126px]">
           {isLoadingLogo ? (
             <Skeleton className="h-full w-full" />
           ) : (
             <Image
                 src={logoUrl || defaultLogoDataUri}
                 alt="CocoTalk Logo"
-                width={140}
-                height={56}
+                width={126}
+                height={50}
                 className="object-contain"
                 data-ai-hint="logo"
                 unoptimized
