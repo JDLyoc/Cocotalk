@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Bot, LogOut, MessageSquare, Sparkles } from "lucide-react";
@@ -47,8 +48,8 @@ export function AppSidebar({
           ))}
         </div>
       </ScrollArea>
-      <div className="mt-auto border-t -mx-4 p-4 bg-muted/50">
-        <Button variant="ghost" className="w-full justify-start rounded-lg" onClick={() => alert("Fonction de déconnexion à implémenter")}>
+      <div className="mt-auto border-t -mx-4 p-4 bg-[#3C63A6]">
+        <Button variant="ghost" className="w-full justify-start rounded-lg text-white hover:bg-white/20 hover:text-white" onClick={() => alert("Fonction de déconnexion à implémenter")}>
             <LogOut className="mr-3 h-5 w-5" />
             <span className="font-medium">Se déconnecter</span>
         </Button>
