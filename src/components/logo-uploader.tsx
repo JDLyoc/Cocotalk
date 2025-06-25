@@ -59,7 +59,7 @@ export function LogoUploader({ children, onLogoUpload }: LogoUploaderProps) {
   return (
     <Dialog onOpenChange={(open) => { if (!open) { setPreview(null); setFile(null); }}}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent>
+      <DialogContent className="bg-white">
         <DialogHeader>
           <DialogTitle>Télécharger le logo</DialogTitle>
         </DialogHeader>
