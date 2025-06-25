@@ -119,7 +119,7 @@ export function ChatPanel({ messages, onSendMessage, isLoading, isWelcomeMode = 
               <Paperclip className="h-5 w-5" />
               <span className="sr-only">Joindre un fichier</span>
             </Button>
-            <Button type="submit" size="icon" onClick={handleSend} disabled={isLoading || (!text && !file)} className="bg-[#3C63A6] hover:bg-[#3C63A6]/90">
+            <Button type="submit" size="icon" onClick={handleSend} disabled={isLoading || (!text && !file)} className="bg-[#3C63A6] hover:bg-[#3C63A6]/90 disabled:bg-[#3C63A6] disabled:opacity-75">
               <Send className="h-5 w-5" />
               <span className="sr-only">Envoyer</span>
             </Button>
