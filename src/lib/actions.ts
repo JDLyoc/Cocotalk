@@ -7,7 +7,6 @@ import { summarizeDocument } from "@/ai/flows/summarize-document";
 import type { DisplayMessage } from "@/app/page";
 
 // Using require for CJS modules that may not have full ESM support or types
-const pdf = require('pdf-parse');
 const mammoth = require('mammoth');
 import * as xlsx from 'xlsx';
 
@@ -26,6 +25,7 @@ async function extractTextFromFile(file: File): Promise<string> {
             return buffer.toString('utf-8');
             
         case 'application/pdf': {
+            const pdf = require('pdf-parse');
             // A custom pagerender function is used as a workaround for a bug in pdf-parse
             // that can cause file system errors in serverless environments.
             const customPageRender = (pageData: any) => {
