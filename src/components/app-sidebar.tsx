@@ -26,10 +26,6 @@ export function AppSidebar({
           <Plus className="mr-2 h-4 w-4" />
           Nouveau Chat
         </Button>
-        <Button size="lg" variant="outline" className="w-full justify-center font-semibold bg-violet text-white hover:bg-violet/90 border-violet rounded-lg" onClick={() => alert("Fonctionnalité à implémenter")}>
-            <Bot className="mr-2 h-4 w-4" />
-            AI Content Generator
-        </Button>
       </div>
 
       <h3 className="px-2 pt-4 pb-2 text-xs font-semibold uppercase text-muted-foreground/80 tracking-wider">
