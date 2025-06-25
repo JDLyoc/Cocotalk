@@ -1,0 +1,49 @@
+'use server';
+
+/**
+ * @fileOverview A multilingual chat AI agent that detects the language of the user's input and responds in the same language.
+ *
+ * - multilingualChat - A function that handles the multilingual chat process.
+ * - MultilingualChatInput - The input type for the multilingualChat function.
+ * - MultilingualChatOutput - The return type for the multilingualChat function.
+ */
+
+import {ai} from '@/ai/genkit';
+import {z} from 'genkit';
+
+const MultilingualChatInputSchema = z.object({
+  message: z.string().describe('The user message to be translated and responded to.'),
+});
+export type MultilingualChatInput = z.infer<typeof MultilingualChatInputSchema>;
+
+const MultilingualChatOutputSchema = z.object({
+  response: z.string().describe('The chatbot response in the same language as the user message.'),
+});
+export type MultilingualChatOutput = z.infer<typeof MultilingualChatOutputSchema>;
+
+export async function multilingualChat(input: MultilingualChatInput): Promise<MultilingualChatOutput> {
+  return multilingualChatFlow(input);
+}
+
+const multilingualChatPrompt = ai.definePrompt({
+  name: 'multilingualChatPrompt',
+  input: {schema: MultilingualChatInputSchema},
+  output: {schema: MultilingualChatOutputSchema},
+  prompt: `You are a multilingual chatbot that can understand and respond in any language.
+  The user will send you a message, and you must respond in the same language as the message.
+
+  User Message: {{{message}}}
+  Response:`,
+});
+
+const multilingualChatFlow = ai.defineFlow(
+  {
+    name: 'multilingualChatFlow',
+    inputSchema: MultilingualChatInputSchema,
+    outputSchema: MultilingualChatOutputSchema,
+  },
+  async input => {
+    const {output} = await multilingualChatPrompt(input);
+    return output!;
+  }
+);
