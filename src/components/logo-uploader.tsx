@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -76,7 +77,7 @@ export function LogoUploader({ children, onLogoUpload }: LogoUploaderProps) {
             onClick={() => fileInputRef.current?.click()}
           >
             {preview ? (
-              <Image src={preview} alt="Logo preview" width={100} height={100} className="max-h-full object-contain" />
+              <Image src={preview} alt="Logo preview" width={100} height={100} className="max-h-full object-contain bg-transparent" />
             ) : (
               <div className="text-center text-muted-foreground">
                 <Upload className="mx-auto h-10 w-10" />

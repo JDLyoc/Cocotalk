@@ -8,19 +8,24 @@ import { Dashboard } from "./dashboard";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import Image from "next/image";
 import { Skeleton } from "./ui/skeleton";
+import * as React from "react";
 
 interface AppHeaderProps {
     logo: string | null;
     onLogoUpload: (base64: string | null) => void;
-    hasMounted: boolean;
 }
 
 interface LogoProps {
     logo: string | null;
-    hasMounted: boolean;
 }
 
-function Logo({ logo, hasMounted }: LogoProps) {
+function Logo({ logo }: LogoProps) {
+    const [hasMounted, setHasMounted] = React.useState(false);
+
+    React.useEffect(() => {
+        setHasMounted(true);
+    }, []);
+
     if (!hasMounted) {
         return <Skeleton className="h-8 w-36" />;
     }
@@ -28,7 +33,7 @@ function Logo({ logo, hasMounted }: LogoProps) {
     if (logo) {
         return (
             <div className="flex items-center gap-2 h-8">
-                <Image src={logo} alt="Uploaded Logo" width={140} height={32} className="object-contain h-full w-auto" />
+                <Image src={logo} alt="Uploaded Logo" width={140} height={32} className="object-contain h-full w-auto bg-transparent" />
             </div>
         )
     }
@@ -43,7 +48,7 @@ function Logo({ logo, hasMounted }: LogoProps) {
     )
 }
 
-export function AppHeader({ logo, onLogoUpload, hasMounted }: AppHeaderProps) {
+export function AppHeader({ logo, onLogoUpload }: AppHeaderProps) {
   const userEmail = "contentredac@gmail.com";
   const getInitials = (email: string) => {
       const namePart = email.split('@')[0];
@@ -54,7 +59,7 @@ export function AppHeader({ logo, onLogoUpload, hasMounted }: AppHeaderProps) {
   return (
     <header className="flex h-16 items-center justify-between border-b bg-background px-4 md:px-6 z-10">
       <div className="flex items-center gap-6">
-        <Logo logo={logo} hasMounted={hasMounted} />
+        <Logo logo={logo} />
       </div>
       
       <div className="flex items-center gap-4">
