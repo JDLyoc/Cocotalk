@@ -1,13 +1,19 @@
 "use client";
 
 import * as React from "react";
-import { Paperclip, Send, Loader2, MessageSquare } from "lucide-react";
+import { Paperclip, Send, Loader2, MessageSquare, FileUp, ScanSearch } from "lucide-react";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { ScrollArea } from "./ui/scroll-area";
 import { ChatMessage } from "./chat-message";
 import type { DisplayMessage } from "@/app/page";
 import { useToast } from "@/hooks/use-toast";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 
 interface ChatPanelProps {
@@ -81,11 +87,6 @@ export function ChatPanel({ messages, onSendMessage, isLoading, isWelcomeMode = 
     }
   };
 
-  const handleAttachClick = () => {
-    toast({ title: 'Ajouter des fichiers' });
-    fileInputRef.current?.click();
-  };
-
   return (
     <div className="flex h-full flex-col relative">
       <div className="flex-1 relative">
@@ -113,16 +114,29 @@ export function ChatPanel({ messages, onSendMessage, isLoading, isWelcomeMode = 
             rows={1}
           />
           <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-             <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*,text/plain,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx" />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={handleAttachClick}
-            >
-              <Paperclip className="h-5 w-5" />
-              <span className="sr-only">Joindre un fichier</span>
-            </Button>
+             <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/jpeg,image/png,image/webp,image/gif,text/plain" />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                >
+                  <Paperclip className="h-5 w-5" />
+                  <span className="sr-only">Joindre un fichier</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="top" align="end">
+                <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
+                  <FileUp className="mr-2 h-4 w-4" />
+                  <span>Ajouter des fichiers</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
+                  <ScanSearch className="mr-2 h-4 w-4" />
+                  <span>Analyser une image</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button type="submit" size="icon" onClick={handleSend} disabled={isLoading || (!text && !file)} className="bg-[#3C63A6] hover:bg-[#3C63A6]/90 disabled:bg-[#3C63A6] disabled:opacity-70">
               <Send className="h-5 w-5" />
               <span className="sr-only">Envoyer</span>
