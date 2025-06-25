@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Paperclip, Send, Loader2, LayoutDashboard, User } from "lucide-react";
+import { Paperclip, Send, Loader2, LayoutDashboard, User, LogOut } from "lucide-react";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { ScrollArea } from "./ui/scroll-area";
@@ -78,20 +78,26 @@ export function ChatPanel({ messages, onSendMessage, isLoading }: ChatPanelProps
           </Avatar>
           <p className="text-sm font-medium text-foreground">utilisateur@exemple.com</p>
         </div>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button variant="ghost" size="icon">
-              <LayoutDashboard className="h-5 w-5" />
-              <span className="sr-only">Ouvrir le tableau de bord</span>
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-4xl h-auto max-h-[90vh]">
-            <DialogHeader>
-              <DialogTitle>Tableau de bord</DialogTitle>
-            </DialogHeader>
-            <Dashboard />
-          </DialogContent>
-        </Dialog>
+        <div className="flex items-center gap-2">
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <LayoutDashboard className="h-5 w-5" />
+                <span className="sr-only">Ouvrir le tableau de bord</span>
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-4xl h-auto max-h-[90vh]">
+              <DialogHeader>
+                <DialogTitle>Tableau de bord</DialogTitle>
+              </DialogHeader>
+              <Dashboard />
+            </DialogContent>
+          </Dialog>
+          <Button variant="ghost" size="icon" onClick={() => alert("Fonction de déconnexion à implémenter")}>
+            <LogOut className="h-5 w-5" />
+            <span className="sr-only">Se déconnecter</span>
+          </Button>
+        </div>
       </header>
       <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
         <div className="space-y-6">
