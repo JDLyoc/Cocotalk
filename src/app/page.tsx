@@ -8,7 +8,8 @@ import { handleChat } from "@/lib/actions";
 import { useToast } from "@/hooks/use-toast";
 import { AppHeader } from "@/components/app-header";
 import { auth } from "@/lib/firebase";
-import { signInAnonymously } from "firebase/auth";
+import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export interface Message {
   id: string;
@@ -23,31 +24,66 @@ export interface Conversation {
   messages: Message[];
 }
 
+function AppSkeleton() {
+    return (
+        <div className="flex flex-col h-screen w-full bg-background overflow-hidden">
+            <header className="flex h-16 items-center justify-between border-b bg-background px-4 md:px-6 z-10">
+                <div className="flex items-center gap-6">
+                    <Skeleton className="h-12 w-[140px]" />
+                </div>
+                <div className="flex items-center gap-4">
+                    <Skeleton className="h-9 w-36" />
+                    <Skeleton className="h-10 w-10 rounded-full" />
+                </div>
+            </header>
+            <div className="flex flex-1 overflow-hidden">
+                <aside className="flex h-full w-full max-w-[280px] flex-col bg-sidebar text-sidebar-foreground p-4">
+                    <Skeleton className="h-11 w-full mb-4" />
+                    <Skeleton className="h-6 w-3/4 mb-4" />
+                    <div className="space-y-1">
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-full" />
+                    </div>
+                </aside>
+                <main className="flex flex-1 flex-col">
+                    <div className="flex h-full flex-col items-center justify-center bg-background text-center p-4">
+                       <Skeleton className="h-16 w-16 rounded-full mb-4" />
+                       <Skeleton className="h-8 w-64 mb-2" />
+                       <Skeleton className="h-5 w-80" />
+                    </div>
+                </main>
+            </div>
+        </div>
+    );
+}
+
 export default function Home() {
   const { toast } = useToast();
   
   const [conversations, setConversations] = React.useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
+  const [isAuthReady, setIsAuthReady] = React.useState(false);
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
   
   React.useEffect(() => {
-    const signIn = async () => {
-        try {
-            await signInAnonymously(auth);
-        } catch (error) {
-            console.error("Anonymous sign-in failed:", error);
-            toast({
-                variant: "destructive",
-                title: "Erreur d'authentification",
-                description: "Impossible de se connecter au backend.",
-            });
-        }
-    };
-    if (!auth.currentUser) {
-        signIn();
-    }
+    const unsubscribe = onAuthStateChanged(auth, user => {
+      if (user) {
+        setIsAuthReady(true);
+      } else {
+        signInAnonymously(auth).catch(error => {
+          console.error("Anonymous sign-in failed:", error);
+          toast({
+            variant: "destructive",
+            title: "Erreur d'authentification",
+            description: "Impossible de se connecter au backend. Veuillez actualiser la page.",
+          });
+        });
+      }
+    });
+    return () => unsubscribe();
   }, [toast]);
 
   React.useEffect(() => {
@@ -157,6 +193,10 @@ export default function Home() {
         setActiveConversationId(newId);
     }
     return newId;
+  }
+  
+  if (!isAuthReady) {
+    return <AppSkeleton />;
   }
 
   return (
