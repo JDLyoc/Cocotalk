@@ -217,6 +217,19 @@ export default function Home() {
     return newId;
   }
   
+  const handleRenameConversation = (id: string, title: string) => {
+    setConversations(prev =>
+      prev.map(conv => (conv.id === id ? { ...conv, title } : conv))
+    );
+  };
+
+  const handleDeleteConversation = (id: string) => {
+    if (activeConversationId === id) {
+      setActiveConversationId(null);
+    }
+    setConversations(prev => prev.filter(conv => conv.id !== id));
+  };
+
   if (!isAuthReady) {
     return <AppSkeleton />;
   }
@@ -230,6 +243,8 @@ export default function Home() {
           activeConversationId={activeConversationId}
           setActiveConversationId={setActiveConversationId}
           createNewChat={() => createNewChat()}
+          onDeleteConversation={handleDeleteConversation}
+          onRenameConversation={handleRenameConversation}
         />
         <main className="flex flex-1 flex-col">
           {activeConversation ? (
