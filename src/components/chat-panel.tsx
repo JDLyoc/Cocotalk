@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Paperclip, Send, Loader2, LayoutDashboard } from "lucide-react";
+import { Paperclip, Send, Loader2, LayoutDashboard, User } from "lucide-react";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { ScrollArea } from "./ui/scroll-area";
@@ -10,15 +10,15 @@ import type { Message } from "@/app/page";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
 import { Dashboard } from "./dashboard";
+import { Avatar, AvatarFallback } from "./ui/avatar";
 
 interface ChatPanelProps {
   messages: Message[];
   onSendMessage: (text: string, file: File | null) => void;
   isLoading: boolean;
-  title: string;
 }
 
-export function ChatPanel({ messages, onSendMessage, isLoading, title }: ChatPanelProps) {
+export function ChatPanel({ messages, onSendMessage, isLoading }: ChatPanelProps) {
   const [text, setText] = React.useState("");
   const [file, setFile] = React.useState<File | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -70,7 +70,14 @@ export function ChatPanel({ messages, onSendMessage, isLoading, title }: ChatPan
   return (
     <div className="flex h-full flex-col">
       <header className="flex items-center justify-between border-b p-4">
-        <h2 className="text-xl font-semibold">{title}</h2>
+        <div className="flex items-center gap-3">
+          <Avatar className="h-9 w-9 border">
+            <AvatarFallback>
+              <User className="h-5 w-5" />
+            </AvatarFallback>
+          </Avatar>
+          <p className="text-sm font-medium text-foreground">utilisateur@exemple.com</p>
+        </div>
         <Dialog>
           <DialogTrigger asChild>
             <Button variant="ghost" size="icon">

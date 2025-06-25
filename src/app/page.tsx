@@ -158,7 +158,6 @@ export default function Home() {
             messages={activeConversation.messages}
             onSendMessage={handleSendMessage}
             isLoading={isLoading}
-            title={activeConversation.title}
           />
         ) : (
           <WelcomeScreen />
