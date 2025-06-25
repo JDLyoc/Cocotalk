@@ -54,8 +54,8 @@ export function Dashboard() {
               </CardContent>
             </Card>
           </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card className="md:col-span-2">
               <CardHeader>
                 <CardTitle>Activité hebdomadaire</CardTitle>
                 <CardDescription>Nombre de conversations par jour.</CardDescription>
