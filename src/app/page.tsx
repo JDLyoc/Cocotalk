@@ -37,7 +37,7 @@ export interface DisplayMessage {
 export interface StoredMessage {
   id: string;
   role: "user" | "assistant" | "system";
-  content: string; // This should always be a string, but we can't trust the DB
+  content: string; // This should always be a string
   file?: {
       name: string;
       type: string;
@@ -211,104 +211,103 @@ React.useEffect(() => {
 
 
 const handleSendMessage = async (text: string, file: File | null) => {
-  if (!auth.currentUser) {
-      toast({ variant: "destructive", title: "Erreur", description: "Utilisateur non authentifié." });
-      return;
-  }
-  setIsLoading(true);
-
-  let currentChatId = activeConversationId;
-  const userId = auth.currentUser.uid;
-  
-  let agentContext: { persona?: string; rules?: string; };
-
-  if (activeCocotalk) {
-    agentContext = { persona: activeCocotalk.persona, rules: activeCocotalk.instructions };
-  } else if (activeConversation?.cocotalkOriginId) {
-    const origin = cocotalks.find(c => c.id === activeConversation.cocotalkOriginId);
-    if (origin) {
-        agentContext = { persona: origin.persona, rules: origin.instructions };
-    } else {
-        agentContext = { 
-            persona: "A helpful assistant.",
-            rules: "You are a helpful assistant. The custom instructions for this conversation could not be found because the original agent was deleted. Inform the user about this and then proceed with the conversation as a general-purpose assistant."
-        };
+    if (!auth.currentUser) {
+        toast({ variant: "destructive", title: "Erreur", description: "Utilisateur non authentifié." });
+        return;
     }
-  } else {
-     agentContext = { 
-       persona: "A friendly and helpful assistant.",
-       rules: "Your job is to have a simple, helpful conversation. Respond clearly and concisely to the user's questions."
-     };
-  }
+    setIsLoading(true);
 
-  try {
-      if (!currentChatId) {
-          const newTitle = activeCocotalk ? activeCocotalk.title : (text ? text.split(' ').slice(0, 3).join(' ') + (text.split(' ').length > 3 ? '...' : '') : file?.name || "New Conversation");
-          
-          const newConvRef = await addDoc(collection(db, "users", userId, "conversations"), {
-              title: newTitle,
-              messages: [],
-              createdAt: serverTimestamp(),
-              userId: userId,
-              ...(activeCocotalk && { cocotalkOriginId: activeCocotalk.id }),
-          });
-          currentChatId = newConvRef.id;
-          selectConversation(newConvRef.id);
-      }
+    let currentChatId = activeConversationId;
+    const userId = auth.currentUser.uid;
+    let convRef;
 
-      const convRef = doc(db, "users", userId, "conversations", currentChatId!);
-      
-      const currentStoredConversation = conversations.find(c => c.id === currentChatId);
-      
-      const validStoredMessages = (currentStoredConversation?.messages || []).filter(
-          (m): m is StoredMessage => m && typeof m.role === 'string' && typeof m.content === 'string'
-      );
-      let messagesToStore: StoredMessage[] = [...validStoredMessages];
+    try {
+        // --- Phase 1: Create conversation if it doesn't exist ---
+        if (!currentChatId) {
+            const newTitle = activeCocotalk ? activeCocotalk.title : (text ? text.split(' ').slice(0, 3).join(' ') + (text.split(' ').length > 3 ? '...' : '') : file?.name || "New Conversation");
+            
+            const newConvRef = await addDoc(collection(db, "users", userId, "conversations"), {
+                title: newTitle,
+                messages: [],
+                createdAt: serverTimestamp(),
+                userId: userId,
+                ...(activeCocotalk && { cocotalkOriginId: activeCocotalk.id }),
+            });
+            currentChatId = newConvRef.id;
+            convRef = newConvRef;
+            selectConversation(newConvRef.id);
+        } else {
+            convRef = doc(db, "users", userId, "conversations", currentChatId);
+        }
 
-      if(activeCocotalk && messagesToStore.length === 0 && activeCocotalk.greetingMessage) {
-        const greetingMessage: StoredMessage = {
-          id: Date.now().toString() + 'g',
-          role: 'assistant',
-          content: activeCocotalk.greetingMessage,
+        // --- Phase 2: Prepare and save user message ---
+        const currentStoredConversation = conversations.find(c => c.id === currentChatId);
+        const validStoredMessages = (currentStoredConversation?.messages || []).filter(
+            (m): m is StoredMessage => m && typeof m.role === 'string' && typeof m.content === 'string'
+        );
+
+        let messagesToStore: StoredMessage[] = [...validStoredMessages];
+
+        // Add greeting message for a new Cocotalk conversation
+        if(activeCocotalk && messagesToStore.length === 0 && activeCocotalk.greetingMessage) {
+            const greetingMessage: StoredMessage = {
+                id: Date.now().toString() + 'g',
+                role: 'assistant',
+                content: activeCocotalk.greetingMessage,
+            };
+            messagesToStore.push(greetingMessage);
+        }
+        
+        const userMessage: StoredMessage = {
+            id: Date.now().toString(),
+            role: "user",
+            content: text,
+            ...(file && { file: { name: file.name, type: file.type } }),
         };
-        messagesToStore.push(greetingMessage);
-      }
+        messagesToStore.push(userMessage);
 
-      const userMessage: StoredMessage = {
-          id: Date.now().toString(),
-          role: "user",
-          content: text,
-          ...(file && { file: { name: file.name, type: file.type } }),
-      };
-      messagesToStore.push(userMessage);
+        // Update Firestore immediately with the user's message for instant feedback
+        await updateDoc(convRef, { messages: messagesToStore });
 
-      await updateDoc(convRef, { messages: messagesToStore });
+        // --- Phase 3: Call AI and save assistant's response ---
+        let agentContext: { persona?: string; rules?: string; };
+        if (activeCocotalk) {
+            agentContext = { persona: activeCocotalk.persona, rules: activeCocotalk.instructions };
+        } else if (activeConversation?.cocotalkOriginId) {
+            const origin = cocotalks.find(c => c.id === activeConversation.cocotalkOriginId);
+            agentContext = origin 
+                ? { persona: origin.persona, rules: origin.instructions }
+                : { persona: "A helpful assistant.", rules: "You are a helpful assistant. The custom instructions for this conversation could not be found because the original agent was deleted. Inform the user about this and then proceed with the conversation as a general-purpose assistant." };
+        } else {
+            agentContext = { persona: "A friendly and helpful assistant.", rules: "Your job is to have a simple, helpful conversation. Respond clearly and concisely to the user's questions." };
+        }
 
-      const { response, error } = await handleChat(messagesToStore, file, agentContext);
-      
-      if (error) {
-          throw new Error(error);
-      }
+        const { response, error } = await handleChat(messagesToStore, file, agentContext);
+        
+        if (error) {
+            throw new Error(error);
+        }
 
-      // BLINDAGE DE L'ÉCRITURE : On s'assure que la réponse est bien une chaîne avant de la sauvegarder.
-      // Cela empêche l'enregistrement de `content: null` dans Firestore.
-      const assistantMessage: StoredMessage = {
-          id: Date.now().toString() + 'a',
-          role: 'assistant',
-          content: typeof response === 'string' ? response : '', 
-      };
-      await updateDoc(convRef, { messages: [...messagesToStore, assistantMessage] });
+        // Defensive coding: ensure response is a string before saving.
+        const assistantMessage: StoredMessage = {
+            id: Date.now().toString() + 'a',
+            role: 'assistant',
+            content: typeof response === 'string' ? response : '', 
+        };
+        
+        // Update Firestore with the final history including the assistant's message
+        await updateDoc(convRef, { messages: [...messagesToStore, assistantMessage] });
 
-  } catch (e: any) {
-      const errorMsg = e.message || "An error occurred. Please try again.";
-      toast({
-          variant: "destructive",
-          title: "Error",
-          description: errorMsg,
-      });
-  } finally {
-      setIsLoading(false);
-  }
+    } catch (e: any) {
+        const errorMsg = e.message || "An error occurred. Please try again.";
+        toast({
+            variant: "destructive",
+            title: "Error",
+            description: errorMsg,
+        });
+    } finally {
+        setIsLoading(false);
+    }
 };
 
 
@@ -429,31 +428,26 @@ const handleSendMessage = async (text: string, file: File | null) => {
     return <AppSkeleton />;
   }
 
-  // BLINDAGE DE LA LECTURE : Cette fonction est rendue "paranoïaque" pour ne jamais planter,
-  // même si les données dans Firestore sont corrompues.
-  const toDisplayMessages = (messages: StoredMessage[]): DisplayMessage[] => {
-    // Étape 1 : S'assurer que nous avons bien un tableau.
+  // This function is "paranoid" and will never crash, even if Firestore data is corrupted.
+  const toDisplayMessages = (messages: StoredMessage[] | undefined): DisplayMessage[] => {
     if (!Array.isArray(messages)) {
         return [];
     }
 
-    // Étape 2 : Filtrer et transformer les messages de manière sécurisée.
     return messages
         .map(msg => {
-            // Ignorer les entrées qui ne sont pas des objets valides.
             if (!msg || typeof msg !== 'object') {
                 return null;
             }
             
             const { id, role, content } = msg;
 
-            // Ignorer les messages qui n'ont pas un id et un rôle valides.
             if (typeof id !== 'string' || !['user', 'assistant', 'system'].includes(role)) {
                 return null;
             }
 
-            // C'est le correctif CRITIQUE : s'assurer que `content` est une chaîne de caractères.
-            // Si c'est `null`, `undefined`, ou autre chose, on le remplace par une chaîne vide.
+            // CRITICAL FIX: Ensure `content` is a string. If it's `null`, `undefined`,
+            // or anything else, replace it with an empty string.
             const textContent = (typeof content === 'string') ? content : '';
             
             let contentNode: React.ReactNode;
@@ -470,7 +464,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
                     </>
                 );
             } else {
-                // L'opération .replace() est maintenant GARANTIE d'être appelée sur une chaîne.
+                // The .replace() operation is now GUARANTEED to be called on a string.
                 const finalHtml = textContent.replace(/\n/g, '<br />');
                 contentNode = <p className="!my-0" dangerouslySetInnerHTML={{ __html: finalHtml }} />;
             }
@@ -482,7 +476,6 @@ const handleSendMessage = async (text: string, file: File | null) => {
               text_content: textContent,
             };
         })
-        // Étape 3 : Retirer tous les messages qui ont été jugés invalides (null).
         .filter((m): m is DisplayMessage => m !== null);
   };
 
@@ -495,7 +488,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
   const activeDisplayConversation = activeConversation ? {
     id: activeConversation.id,
     title: activeConversation.title,
-    messages: toDisplayMessages(activeConversation.messages || []),
+    messages: toDisplayMessages(activeConversation.messages),
   } : null;
 
   const initialCocotalkMessages: DisplayMessage[] = [];
