@@ -242,7 +242,12 @@ const handleSendMessage = async (text: string, file: File | null) => {
         }
 
         const currentStoredConversation = conversations.find(c => c.id === currentChatId);
-        let baseMessages: StoredMessage[] = [...(currentStoredConversation?.messages || [])];
+        
+        // **CRUCIAL FIX**: Filter history for valid messages *before* doing anything else.
+        // This prevents crashes from `null` content in old messages.
+        const baseMessages: StoredMessage[] = (currentStoredConversation?.messages || [])
+            .filter((m): m is StoredMessage => m && typeof m.role === 'string' && typeof m.content === 'string');
+
         if (activeCocotalk && baseMessages.length === 0 && activeCocotalk.greetingMessage) {
             const greetingMessage: StoredMessage = {
                 id: Date.now().toString() + 'g',
@@ -262,10 +267,8 @@ const handleSendMessage = async (text: string, file: File | null) => {
         // First DB update with user message for immediate UI feedback
         await updateDoc(convRef, { messages: [...baseMessages, userMessage] });
         
-        // **CRUCIAL FIX**: Filter history to ensure all messages sent to the AI are valid.
-        // This prevents crashes from `null` content in old messages.
+        // **CRUCIAL FIX**: Translate roles for Genkit AI
         const messagesForGenkit = [...baseMessages, userMessage]
-            .filter(msg => typeof msg.content === 'string') // Ensure content is a string
             .map(msg => ({
                 role: msg.role === 'assistant' ? 'model' : 'user',
                 content: msg.content,
@@ -446,6 +449,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
                 return null;
             }
 
+            // **CRUCIAL FIX**: Ensure content is always a string to prevent crashes.
             const textContent = (typeof content === 'string') ? content : '';
             
             let contentNode: React.ReactNode;
@@ -554,3 +558,5 @@ const handleSendMessage = async (text: string, file: File | null) => {
     </div>
   );
 }
+
+    
