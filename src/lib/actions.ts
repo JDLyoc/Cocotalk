@@ -2,7 +2,7 @@
 "use server";
 
 import { multilingualChat } from "@/ai/flows/multilingual-chat";
-import type { StoredMessage } from "@/app/page";
+import type { StoredMessage, StoredCocotalk } from "@/lib/types";
 import type { Message } from "genkit";
 import { db } from "./firebase";
 import {
@@ -12,48 +12,46 @@ import {
   doc,
   serverTimestamp,
   arrayUnion,
+  getDoc,
 } from "firebase/firestore";
-
-// Note: File processing logic is temporarily removed to isolate the core issue.
-// We will add it back once the basic conversation flow is stable.
-
-interface CocotalkContext {
-    originId: string;
-    title: string;
-    persona?: string;
-    instructions: string;
-}
 
 interface ProcessMessageInput {
   userId: string;
   conversationId: string | null;
   messageContent: string;
   model: string;
-  currentMessages: StoredMessage[];
-  cocotalkContext: CocotalkContext | null;
+  activeCocotalk: StoredCocotalk | null;
 }
 
 export async function processUserMessage(input: ProcessMessageInput): Promise<{ newConversationId?: string; error?: string }> {
-    const { userId, conversationId, messageContent, model, currentMessages, cocotalkContext } = input;
+    const { userId, conversationId, messageContent, model, activeCocotalk } = input;
 
     try {
-        // Step 1: Prepare user message for AI and database
-        const userMessageForDb: StoredMessage = {
-            id: Date.now().toString(),
-            role: 'user',
-            content: messageContent,
-        };
-        
-        const historyForAI = [...currentMessages, userMessageForDb].map(m => ({ 
-            role: m.role, 
-            content: m.content 
-        })) as Message[];
+        let historyForAI: Message[] = [];
 
-        // Step 2: Call the AI
+        // Step 1: Fetch existing conversation from DB if conversationId is provided.
+        if (conversationId) {
+            const conversationRef = doc(db, "users", userId, "conversations", conversationId);
+            const conversationSnap = await getDoc(conversationRef);
+
+            if (conversationSnap.exists()) {
+                const conversationData = conversationSnap.data();
+                const existingMessages: StoredMessage[] = conversationData.messages || [];
+                historyForAI = existingMessages.map((m) => ({
+                    role: m.role,
+                    content: m.content,
+                }));
+            }
+        }
+        
+        // Add the new user message to the history for the AI.
+        historyForAI.push({ role: 'user', content: messageContent });
+
+        // Step 2: Call the AI.
         const aiResult = await multilingualChat({
             messages: historyForAI,
-            persona: cocotalkContext?.persona,
-            rules: cocotalkContext?.instructions,
+            persona: activeCocotalk?.persona,
+            rules: activeCocotalk?.instructions,
             model: model,
         });
 
@@ -61,8 +59,14 @@ export async function processUserMessage(input: ProcessMessageInput): Promise<{ 
             return { error: aiResult.error || "L'IA n'a pas pu générer de réponse." };
         }
 
+        // Prepare messages for DB
+        const userMessageForDb: StoredMessage = {
+            id: `user_${Date.now()}`,
+            role: 'user',
+            content: messageContent,
+        };
         const modelMessageForDb: StoredMessage = {
-            id: (Date.now() + 1).toString(),
+            id: `model_${Date.now() + 1}`,
             role: 'model',
             content: aiResult.response,
         };
@@ -77,13 +81,14 @@ export async function processUserMessage(input: ProcessMessageInput): Promise<{ 
             return { newConversationId: conversationId };
         } else {
             // Create new conversation
-            const newTitle = cocotalkContext?.title || messageContent.substring(0, 30).trim() || "Nouvelle Conversation";
+            const newTitle = activeCocotalk?.title || messageContent.substring(0, 30).trim() || "Nouvelle Conversation";
+            
             const newConvData = {
                 title: newTitle,
                 messages: [userMessageForDb, modelMessageForDb],
                 userId: userId,
                 createdAt: serverTimestamp(),
-                ...(cocotalkContext && { cocotalkOriginId: cocotalkContext.originId }),
+                ...(activeCocotalk && { cocotalkOriginId: activeCocotalk.id }),
             };
             const conversationRef = await addDoc(collection(db, "users", userId, "conversations"), newConvData);
             return { newConversationId: conversationRef.id };
@@ -91,7 +96,6 @@ export async function processUserMessage(input: ProcessMessageInput): Promise<{ 
 
     } catch (error: any) {
         console.error("Critical error in processUserMessage:", error);
-        // Check for specific Firestore permission errors
         if (error.code === 'permission-denied') {
             return { error: "Erreur de permission. Vérifiez les règles de sécurité de Firestore." };
         }

@@ -21,59 +21,16 @@ import {
   doc,
   updateDoc,
   deleteDoc,
-  Timestamp,
   setDoc,
 } from "firebase/firestore";
 import type { CocotalkFormValues } from "@/components/cocotalk-form";
-
-// Interface for messages passed to components (with ReactNode)
-export interface DisplayMessage {
-  id: string;
-  role: "user" | "model";
-  content: React.ReactNode;
-  text_content?: string;
-}
-
-// Interface for messages stored in Firestore
-export interface StoredMessage {
-  id: string;
-  role: "user" | "model";
-  content: string;
-  file?: {
-      name: string;
-      type: string;
-  };
-}
-
-// Interface for conversations passed to components
-export interface DisplayConversation {
-  id: string;
-  title: string;
-  messages: DisplayMessage[];
-}
-
-// Interface for conversations stored in Firestore
-export interface StoredConversation {
-  id: string;
-  title: string;
-  messages: StoredMessage[];
-  createdAt: Timestamp;
-  userId: string;
-  cocotalkOriginId?: string;
-}
-
-// Interface for custom assistants (Cocotalks)
-export interface StoredCocotalk {
-  id: string;
-  title: string;
-  description: string;
-  persona?: string;
-  instructions: string;
-  starterMessage: string;
-  greetingMessage?: string;
-  createdAt: Timestamp;
-  userId: string;
-}
+import type {
+  StoredMessage,
+  StoredConversation,
+  StoredCocotalk,
+  DisplayMessage,
+  DisplayConversation,
+} from "@/lib/types";
 
 function AppSkeleton() {
     return (
@@ -130,12 +87,10 @@ export default function Home() {
   React.useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // User is signed in.
         const userDocRef = doc(db, "users", user.uid);
         await setDoc(userDocRef, { lastLogin: serverTimestamp() }, { merge: true });
         setCurrentUser(user);
       } else {
-        // User is signed out. Sign in anonymously.
         await signInAnonymously(auth).catch(error => {
           console.error("Anonymous sign-in failed:", error);
           toast({
@@ -148,7 +103,7 @@ export default function Home() {
       setIsAuthReady(true);
     });
     return () => unsubscribe();
-  }, []);
+  }, [toast]);
 
   // Effect 1: Fetch conversations when user is ready.
   React.useEffect(() => {
@@ -178,7 +133,7 @@ export default function Home() {
     });
 
     return () => unsubscribe();
-  }, [isAuthReady, currentUser]);
+  }, [isAuthReady, currentUser, toast]);
 
   // Effect 2: Set the initial active conversation after data has loaded.
   React.useEffect(() => {
@@ -212,14 +167,15 @@ export default function Home() {
     });
 
     return () => unsubscribe();
-  }, [isAuthReady, currentUser]);
+  }, [isAuthReady, currentUser, toast]);
 
   const handleSendMessage = async (text: string, file: File | null) => {
     if (!currentUser) {
       toast({ variant: "destructive", title: "Erreur", description: "Utilisateur non authentifié." });
       return;
     }
-    // Simplified logic: only handle text for now to ensure core functionality.
+    
+    // We will ignore files for now to ensure text works.
     const messageContent = text.trim();
     if (!messageContent) {
       return;
@@ -228,20 +184,13 @@ export default function Home() {
     setIsLoading(true);
 
     try {
+      // The client now sends LESS information. The server is in charge.
       const result = await processUserMessage({
         userId: currentUser.uid,
         conversationId: activeConversationId,
         messageContent: messageContent,
-        currentMessages: activeConversation?.messages || [],
         model: model,
-        cocotalkContext: activeCocotalk
-          ? {
-              originId: activeCocotalk.id,
-              title: activeCocotalk.title,
-              persona: activeCocotalk.persona,
-              instructions: activeCocotalk.instructions,
-            }
-          : null,
+        activeCocotalk: activeCocotalk || null,
       });
 
       if (result.error) {
@@ -253,9 +202,9 @@ export default function Home() {
       }
 
       // If a new chat was created, select it.
-      // The conversation list will be updated automatically by the onSnapshot listener.
+      // The onSnapshot listener will update the conversation list automatically.
       if (result.newConversationId && !activeConversationId) {
-        selectConversation(result.newConversationId);
+        setActiveConversationId(result.newConversationId);
       }
     } catch (e: any) {
       console.error("Erreur inattendue dans handleSendMessage:", e);
