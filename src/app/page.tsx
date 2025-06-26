@@ -49,7 +49,6 @@ export interface StoredMessage {
 export interface ApiMessage {
   role: "user" | "model";
   content: string;
-  file?: { name: string; type: string; };
 }
 
 // Interface for conversations passed to components
@@ -218,17 +217,22 @@ React.useEffect(() => {
 
 const handleNormalMessage = async (text: string, file: File | null) => {
   const userId = auth.currentUser!.uid;
+
+  const messageContent = text.trim() || (file ? `Analyse du fichier: ${file.name}` : "");
+  if (!messageContent) {
+    throw new Error("Impossible d'envoyer un message vide.");
+  }
+
   let convId = activeConversationId;
   let conversationRef;
   let currentHistory: StoredMessage[] = [];
 
-  // Step 1: Get or create conversation
   if (convId) {
     conversationRef = doc(db, "users", userId, "conversations", convId);
     const currentConv = conversations.find(c => c.id === convId);
     currentHistory = currentConv?.messages ? [...currentConv.messages] : [];
   } else {
-    const newTitle = text.substring(0, 30).trim() + (text.length > 30 ? '...' : '') || file?.name || "Nouvelle Conversation";
+    const newTitle = text.substring(0, 30).trim() || file?.name || "Nouvelle Conversation";
     const newConvData = {
       title: newTitle,
       messages: [],
@@ -240,8 +244,6 @@ const handleNormalMessage = async (text: string, file: File | null) => {
     selectConversation(convId);
   }
 
-  // Step 2: Create a valid user message
-  const messageContent = text.trim() || (file ? `Analyse du fichier: ${file.name}` : "");
   const userMessage: StoredMessage = {
     id: Date.now().toString(),
     role: "user",
@@ -249,14 +251,10 @@ const handleNormalMessage = async (text: string, file: File | null) => {
     ...(file && { file: { name: file.name, type: file.type } }),
   };
 
-  const updatedHistory = [...currentHistory, userMessage];
-  await updateDoc(conversationRef, { messages: updatedHistory });
-
-  // Step 3: Call server action
-  const apiHistory = updatedHistory.map(({ role, content, file: fileInfo }) => ({
+  const tempHistoryForApi = [...currentHistory, userMessage];
+  const apiHistory = tempHistoryForApi.map(({ role, content }) => ({
     role: role as 'user' | 'model',
     content,
-    ...(fileInfo && { file: fileInfo })
   }));
 
   const { response, error } = await standardChat({
@@ -266,30 +264,31 @@ const handleNormalMessage = async (text: string, file: File | null) => {
   });
 
   if (error) {
-    toast({ variant: "destructive", title: "Erreur de l'IA", description: error });
-    // Remove the user message we just added to avoid a broken state
-    await updateDoc(conversationRef, { messages: currentHistory });
-    return;
+    throw new Error(`Une erreur est survenue: ${error}`);
   }
 
-  // Step 4: Create model message and update Firestore again
   const modelMessage: StoredMessage = {
     id: (Date.now() + 1).toString(),
     role: 'model',
     content: response || 'Désolé, je n\'ai pas pu générer de réponse.',
   };
-  await updateDoc(conversationRef, { messages: [...updatedHistory, modelMessage] });
+  
+  await updateDoc(conversationRef, { messages: [...tempHistoryForApi, modelMessage] });
 };
   
 const handleCocotalkMessage = async (text: string, file: File | null) => {
   if (!activeCocotalk) return;
-
   const userId = auth.currentUser!.uid;
+  
+  const messageContent = text.trim() || (file ? `Analyse du fichier: ${file.name}` : "");
+  if (!messageContent) {
+    throw new Error("Impossible d'envoyer un message vide.");
+  }
+  
   let convId = activeConversationId;
   let conversationRef;
   let currentHistory: StoredMessage[] = [];
 
-  // Step 1: Get or create conversation
   if (convId) {
     conversationRef = doc(db, "users", userId, "conversations", convId);
     const currentConv = conversations.find(c => c.id === convId);
@@ -307,8 +306,6 @@ const handleCocotalkMessage = async (text: string, file: File | null) => {
     selectConversation(convId);
   }
 
-  // Step 2: Create a valid user message
-  const messageContent = text.trim() || (file ? `Analyse du fichier: ${file.name}` : "");
   const userMessage: StoredMessage = {
     id: Date.now().toString(),
     role: "user",
@@ -316,14 +313,10 @@ const handleCocotalkMessage = async (text: string, file: File | null) => {
     ...(file && { file: { name: file.name, type: file.type } }),
   };
 
-  const updatedHistory = [...currentHistory, userMessage];
-  await updateDoc(conversationRef, { messages: updatedHistory });
-
-  // Step 3: Call server action
-  const apiHistory = updatedHistory.map(({ role, content, file: fileInfo }) => ({
+  const tempHistoryForApi = [...currentHistory, userMessage];
+  const apiHistory = tempHistoryForApi.map(({ role, content }) => ({
     role: role as 'user' | 'model',
     content,
-    ...(fileInfo && { file: fileInfo })
   }));
 
   const { response, error } = await cocotalkChat({
@@ -335,19 +328,16 @@ const handleCocotalkMessage = async (text: string, file: File | null) => {
   });
 
   if (error) {
-    toast({ variant: "destructive", title: "Erreur de l'IA", description: error });
-    // Remove the user message we just added to avoid a broken state
-    await updateDoc(conversationRef, { messages: currentHistory });
-    return;
+    throw new Error(`Une erreur est survenue: ${error}`);
   }
 
-  // Step 4: Create model message and update Firestore again
   const modelMessage: StoredMessage = {
     id: (Date.now() + 1).toString(),
     role: 'model',
     content: response || 'Désolé, je n\'ai pas pu générer de réponse.',
   };
-  await updateDoc(conversationRef, { messages: [...updatedHistory, modelMessage] });
+  
+  await updateDoc(conversationRef, { messages: [...tempHistoryForApi, modelMessage] });
 };
 
 const handleSendMessage = async (text: string, file: File | null) => {
@@ -369,7 +359,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
         console.error("Erreur inattendue dans handleSendMessage:", e);
         toast({
             variant: "destructive",
-            title: "Erreur Inattendue",
+            title: "Erreur",
             description: e.message || "Une erreur est survenue. Veuillez réessayer.",
         });
     } finally {
