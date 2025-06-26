@@ -54,14 +54,23 @@ export async function handleChat(
   cocotalkContext: StoredCocotalk | undefined,
   model: string
 ) {
-  // Safeguard against empty history submissions.
-  if (!history || history.length === 0) {
-    console.error("Error in handleChat: Received empty or null history.");
-    return { response: '', error: "Cannot process an empty conversation history." };
+  // Defensively clean the history to remove any corrupted messages.
+  // A valid message must be an object with a 'role' and a string 'content'.
+  const cleanHistory = history.filter(msg => 
+      msg &&
+      typeof msg.role === 'string' &&
+      typeof msg.content === 'string'
+  );
+
+  // If after cleaning the history is empty AND there's no file, we cannot proceed.
+  if (cleanHistory.length === 0 && !file) {
+    const errorMsg = "Cannot process a request with no valid messages or file.";
+    console.error(`Error in handleChat: ${errorMsg} Original history had ${history.length} items.`);
+    return { response: '', error: errorMsg };
   }
 
   try {
-    let historyForGenkit = history.map(msg => ({
+    let historyForGenkit = cleanHistory.map(msg => ({
       role: msg.role === 'assistant' ? 'model' : 'user',
       content: msg.content,
     }));
@@ -94,6 +103,10 @@ export async function handleChat(
           historyForGenkit[lastUserMessageIndex].content = originalContent
             ? `${contextText}\n\nMessage de l'utilisateur: ${originalContent}`.trim()
             : contextText;
+      } else {
+        // This case occurs if the history was completely filtered out, but a file was attached.
+        // We create a new user message to carry the file context.
+        historyForGenkit.push({ role: 'user', content: contextText });
       }
     }
     
