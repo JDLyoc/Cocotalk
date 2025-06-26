@@ -11,6 +11,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import { searchWebTool } from '../tools/web-search';
 
 const MultilingualChatInputSchema = z.object({
   message: z.string().describe('The user message to be translated and responded to.'),
@@ -32,6 +33,7 @@ const multilingualChatPrompt = ai.definePrompt({
   name: 'multilingualChatPrompt',
   input: {schema: MultilingualChatInputSchema},
   output: {schema: MultilingualChatOutputSchema},
+  tools: [searchWebTool],
   prompt: `{{#if customInstructions}}
 {{{customInstructions}}}
 {{#if persona}}
