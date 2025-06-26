@@ -85,30 +85,42 @@ export default function Home() {
   const activeConversation = conversations.find(c => c.id === activeConversationId);
   const activeCocotalk = cocotalks.find(c => c.id === activeCocotalkId);
   
+  // Effect 1: Listen for auth state changes
   React.useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        // User is signed in.
         const userDocRef = doc(db, "users", user.uid);
+        // Using set with merge is safe for both creation and updates.
         await setDoc(userDocRef, { lastLogin: serverTimestamp() }, { merge: true });
         setCurrentUser(user);
       } else {
-        await signInAnonymously(auth).catch(error => {
-          console.error("Anonymous sign-in failed:", error);
-          toast({
-            variant: "destructive",
-            title: "Authentication Error",
-            description: "Could not connect to the backend. Please refresh the page.",
-          });
-        });
+        // User is signed out.
+        setCurrentUser(null);
       }
       setIsAuthReady(true);
     });
     return () => unsubscribe();
   }, []);
 
-  // Effect 1: Fetch conversations when user is ready.
+  // Effect 2: If auth is ready but there's no user, sign in anonymously.
+  // This separates the sign-in action from the listener, preventing race conditions.
   React.useEffect(() => {
-    if (!isAuthReady || !currentUser) return;
+    if (isAuthReady && !currentUser) {
+      signInAnonymously(auth).catch(error => {
+        console.error("Anonymous sign-in failed:", error);
+        toast({
+          variant: "destructive",
+          title: "Authentication Error",
+          description: "Could not connect to the backend. Please refresh the page.",
+        });
+      });
+    }
+  }, [isAuthReady, currentUser, toast]);
+
+  // Effect 3: Fetch conversations when user is authenticated.
+  React.useEffect(() => {
+    if (!currentUser) return;
 
     setIsDataLoading(true);
     const q = query(
@@ -122,7 +134,7 @@ export default function Home() {
             ...doc.data(),
         } as StoredConversation));
         setConversations(conversationsData);
-        setIsDataLoading(false); // Done loading
+        setIsDataLoading(false);
     }, (error) => {
         console.error("Error fetching conversations:", error);
         toast({
@@ -134,9 +146,9 @@ export default function Home() {
     });
 
     return () => unsubscribe();
-  }, [isAuthReady, currentUser]);
+  }, [currentUser, toast]);
 
-  // Effect 2: Set the initial active conversation after data has loaded.
+  // Effect 4: Set the initial active conversation after data has loaded.
   React.useEffect(() => {
     if (!isDataLoading && conversations.length > 0 && !activeConversationId && !activeCocotalkId) {
         setActiveConversationId(conversations[0].id);
@@ -144,8 +156,9 @@ export default function Home() {
   }, [isDataLoading, conversations, activeConversationId, activeCocotalkId]);
 
 
+  // Effect 5: Fetch cocotalks when user is authenticated.
   React.useEffect(() => {
-    if (!isAuthReady || !currentUser) return;
+    if (!currentUser) return;
     
     const q = query(
       collection(db, "users", currentUser.uid, "cocotalks"),
@@ -168,7 +181,7 @@ export default function Home() {
     });
 
     return () => unsubscribe();
-  }, [isAuthReady, currentUser]);
+  }, [currentUser, toast]);
 
   const handleSendMessage = async (text: string, file: File | null) => {
     if (!currentUser) {
@@ -187,15 +200,11 @@ export default function Home() {
         id: `user_${Date.now()}`,
         role: 'user',
         content: messageContent,
-        // TODO: File handling will be re-implemented here
     };
 
-    // If it's an existing conversation, use its history.
-    // If it's a new one (or a cocotalk), the history is empty.
     const history = activeConversation ? activeConversation.messages : [];
 
     try {
-      // Step 1: Call the AI-only server action
       const aiResult = await invokeAiChat({
           conversationHistory: history,
           messageContent: messageContent,
@@ -219,16 +228,13 @@ export default function Home() {
           content: aiResult.response,
       };
 
-      // Step 2: Handle the database write on the client
       if (activeConversationId) {
-        // Update existing conversation
         const convRef = doc(db, "users", currentUser.uid, "conversations", activeConversationId);
         await updateDoc(convRef, {
             messages: arrayUnion(userMessageForDb, modelMessageForDb)
         });
 
       } else {
-        // Create new conversation
         const newTitle = activeCocotalk?.title || messageContent.substring(0, 30).trim() || "Nouvelle Conversation";
         
         const newConvRef = await addDoc(collection(db, "users", currentUser.uid, "conversations"), {
@@ -239,7 +245,6 @@ export default function Home() {
             ...(activeCocotalk && { cocotalkOriginId: activeCocotalk.id }),
         });
         
-        // Select the new conversation
         selectConversation(newConvRef.id);
       }
 
