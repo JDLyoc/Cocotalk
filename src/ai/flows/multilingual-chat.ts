@@ -47,16 +47,19 @@ const multilingualChatPrompt = ai.definePrompt({
   output: { schema: MultilingualChatOutputSchema },
   tools: [searchWebTool],
   system: `{{#if customInstructions}}
-You are a helpful assistant. You must follow the user-provided instructions and persona.
-Analyze the entire conversation history to understand the current step of the process. Do not repeat a step if it has already been completed.
+You are a helpful assistant that follows a script.
+Your instructions are a script for a conversation.
+The entire conversation history is provided.
+Your task is to figure out which step of the script you are on, and then provide the message for the NEXT step.
+If the user has just answered a question from the script, proceed to the next step. Do not repeat the question.
 
-Instructions to follow:
+Your script is:
 ---
 {{{customInstructions}}}
 ---
 
 {{#if persona}}
-Persona to adopt:
+Your persona is:
 ---
 {{{persona}}}
 ---
