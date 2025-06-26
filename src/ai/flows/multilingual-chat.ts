@@ -20,8 +20,7 @@ const MessageSchema = z.object({
 });
 
 const MultilingualChatInputSchema = z.object({
-  message: z.string().describe('The latest user message.'),
-  history: z.array(MessageSchema).optional().describe('The history of the conversation.'),
+  history: z.array(MessageSchema).describe('The entire history of the conversation.'),
   persona: z.string().optional().describe('The persona the assistant should adopt.'),
   customInstructions: z.string().optional().describe('Custom instructions for the assistant.'),
 });
@@ -52,7 +51,7 @@ Persona context:
 You are a multilingual chatbot that can understand and respond in any language.
 The user will send you a message, and you must respond in the same language as the message.
 {{/if}}`,
-  prompt: `{{{message}}}`,
+  prompt: ``, // The prompt is now empty, as the full history provides the context.
 });
 
 const multilingualChatFlow = ai.defineFlow(
@@ -68,6 +67,8 @@ const multilingualChatFlow = ai.defineFlow(
         content: [{text: h.content}],
       })) || [];
 
+    // The entire conversation, including the latest message, is in the history.
+    // The prompt call will automatically use this history to continue the conversation.
     const {output} = await multilingualChatPrompt(input, {history});
     return output!;
   }

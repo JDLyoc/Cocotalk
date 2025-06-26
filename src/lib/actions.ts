@@ -4,7 +4,7 @@
 import { multilingualChat } from "@/ai/flows/multilingual-chat";
 import { decodeImage } from "@/ai/flows/image-decoder";
 import { summarizeDocument } from "@/ai/flows/summarize-document";
-import type { DisplayMessage } from "@/app/page";
+import type { StoredMessage } from "@/app/page";
 
 const mammoth = require('mammoth');
 import * as xlsx from 'xlsx';
@@ -54,12 +54,12 @@ interface CustomContext {
 }
 
 export async function handleChat(
-  history: DisplayMessage[],
-  text: string,
+  history: StoredMessage[],
   file: File | null,
   customContext?: CustomContext
 ) {
   let contextText = "";
+  const conversationHistory = [...history]; // Create a mutable copy
 
   if (file) {
     if (file.type.startsWith("image/")) {
@@ -86,17 +86,22 @@ export async function handleChat(
     }
   }
 
-  const fullMessage = contextText ? `${contextText}\n\nMessage de l'utilisateur: ${text}` : text;
+  // Prepend file context to the last user message if it exists
+  if (contextText) {
+    const lastMessage = conversationHistory[conversationHistory.length - 1];
+    if (lastMessage && lastMessage.role === 'user') {
+        lastMessage.content = `${contextText}\n\nMessage de l'utilisateur: ${lastMessage.content}`;
+    }
+  }
   
-  const apiHistory = history
+  const apiHistory = conversationHistory
     .filter(m => m.role === 'user' || m.role === 'assistant')
     .map(m => ({
         role: m.role === 'user' ? 'user' : 'model',
-        content: m.text_content || '',
+        content: m.content || '',
     }));
 
   const response = await multilingualChat({ 
-    message: fullMessage,
     history: apiHistory,
     persona: customContext?.persona,
     customInstructions: customContext?.instructions

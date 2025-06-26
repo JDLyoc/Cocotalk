@@ -256,11 +256,10 @@ const handleSendMessage = async (text: string, file: File | null) => {
 
       const convRef = doc(db, "users", userId, "conversations", currentChatId!);
       
-      const currentStoredConversation = conversations.find(c => c.id === currentChatId);
-      const historyFromDb = currentStoredConversation?.messages || [];
+      const currentStoredConversation = conversations.find(c => c.id === currentChatId) || { messages: [] };
+      const historyFromDb = currentStoredConversation.messages;
       
-      const historyForApi: StoredMessage[] = [...historyFromDb];
-      const messagesToStore: StoredMessage[] = [...historyFromDb];
+      let messagesToStore: StoredMessage[] = [...historyFromDb];
 
       if(activeCocotalk && historyFromDb.length === 0 && activeCocotalk.greetingMessage) {
         const greetingMessage: StoredMessage = {
@@ -268,7 +267,6 @@ const handleSendMessage = async (text: string, file: File | null) => {
           role: 'assistant',
           content: activeCocotalk.greetingMessage,
         };
-        historyForApi.push(greetingMessage);
         messagesToStore.push(greetingMessage);
       }
 
@@ -282,14 +280,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
 
       await updateDoc(convRef, { messages: messagesToStore });
 
-      const displayHistoryForApi = historyForApi.map(m => ({
-          id: m.id, 
-          role: m.role, 
-          content: <p>{m.content}</p>,
-          text_content: m.content
-      })) as any;
-
-      const response = await handleChat(displayHistoryForApi, text, file, customContext);
+      const response = await handleChat(messagesToStore, file, customContext);
 
       if (response.error) {
           throw new Error(response.error);
