@@ -21,6 +21,7 @@ import {
   updateDoc,
   deleteDoc,
   Timestamp,
+  setDoc,
 } from "firebase/firestore";
 import type { CocotalkFormValues } from "@/components/cocotalk-form";
 
@@ -125,8 +126,11 @@ export default function Home() {
   const activeCocotalk = cocotalks.find(c => c.id === activeCocotalkId);
   
   React.useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, user => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        // Ensure user document exists in Firestore
+        const userDocRef = doc(db, "users", user.uid);
+        await setDoc(userDocRef, { lastLogin: serverTimestamp() }, { merge: true });
         setIsAuthReady(true);
       } else {
         signInAnonymously(auth).catch(error => {
@@ -361,7 +365,14 @@ const handleSendMessage = async (text: string, file: File | null) => {
   };
   
   const handleCreateCocotalk = async (values: CocotalkFormValues) => {
-    if (!auth.currentUser) return;
+    if (!auth.currentUser) {
+        toast({
+            variant: 'destructive',
+            title: 'Erreur d\'authentification',
+            description: 'Veuillez patienter ou rafraîchir la page et réessayer.',
+        });
+        return;
+    }
     try {
       const docRef = await addDoc(collection(db, "users", auth.currentUser.uid, "cocotalks"), {
         ...values,
@@ -527,3 +538,5 @@ const handleSendMessage = async (text: string, file: File | null) => {
     </div>
   );
 }
+
+    
