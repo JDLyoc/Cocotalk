@@ -51,9 +51,11 @@ const multilingualChatFlow = ai.defineFlow(
     const { messages, persona, rules, model } = input;
     const activeModel = model || 'googleai/gemini-2.0-flash';
     
-    let historyForGenkit: Message[] = messages.filter(m => m.role !== 'system');
+    // Make a mutable copy to avoid side effects
+    let historyForGenkit: Message[] = JSON.parse(JSON.stringify(messages));
 
-    // Only inject a system prompt if there are specific instructions (for Cocotalks).
+    // For a standard chat, persona and rules will be undefined, and this block will be skipped.
+    // For a Cocotalk, we inject the instructions into the first user message.
     if (persona || rules) {
       const systemPromptText = `You are a powerful and flexible conversational AI assistant.
 Your behavior is defined by the following persona and rules. You MUST follow them.
@@ -71,14 +73,11 @@ ${rules || 'Have a friendly and helpful conversation with the user.'}
 You have access to a web search tool. Use it by calling 'searchWeb' when you need recent information, facts, news, or up-to-date data to answer a user's request.
 `;
 
-      // Inject the system prompt into the first user message. This is the correct way for Gemini.
+      // Inject the system prompt into the first user message, which is how Gemini prefers it.
       if (historyForGenkit.length > 0 && historyForGenkit[0].role === 'user') {
-        historyForGenkit[0] = {
-          ...historyForGenkit[0],
-          content: `${systemPromptText}\n\n---\n\nUser Request:\n${historyForGenkit[0].content}`,
-        };
+        historyForGenkit[0].content = `${systemPromptText}\n\n---\n\nUser Request:\n${historyForGenkit[0].content}`;
       } else {
-        // If history is empty or doesn't start with a user, create a user message with the instructions.
+        // If history is empty or starts with the model, add a new user message.
         historyForGenkit.unshift({ role: 'user', content: systemPromptText });
       }
     }
@@ -99,6 +98,7 @@ You have access to a web search tool. Use it by calling 'searchWeb' when you nee
 
     // Loop to handle tool calls until a final text response is generated
     while (true) {
+        // If the response is text, we are done.
         if (genkitResponse.text) {
             break;
         }
@@ -106,12 +106,14 @@ You have access to a web search tool. Use it by calling 'searchWeb' when you nee
         const toolCalls = genkitResponse.toolCalls();
         if (toolCalls.length > 0) {
             const toolOutputs: any[] = [];
+            // Execute each requested tool
             for (const call of toolCalls) {
                 console.log('Tool call requested:', call);
                 const output = await ai.runTool(call);
                 toolOutputs.push(output);
             }
             
+            // Re-run generation with the tool results included in the history
             genkitResponse = await ai.generate({
                 model: activeModel,
                 history: [...historyForGenkit, genkitResponse.message, ...toolOutputs],
@@ -119,6 +121,8 @@ You have access to a web search tool. Use it by calling 'searchWeb' when you nee
                 toolChoice: 'auto',
             });
         } else {
+            // If there's no text and no tool call, it's an abnormal state.
+            // Break the loop to prevent an infinite loop.
             console.warn("Generation response has no text and no tool calls. Breaking loop.");
             break;
         }

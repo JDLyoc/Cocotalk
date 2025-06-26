@@ -62,62 +62,58 @@ export async function handleChat(
   model: string
 ) {
   try {
-    // Step 1: Translate roles for Genkit ('assistant' -> 'model') and clean data
+    // Step 1: Translate roles for Genkit ('assistant' -> 'model') and robustly clean data.
     let genkitHistory: GenkitMessage[] = history
-        .filter(msg => (msg.role === 'user' || msg.role === 'assistant') && typeof msg.content === 'string')
+        .filter(msg => msg && (msg.role === 'user' || msg.role === 'assistant') && typeof msg.content === 'string' && msg.content.trim() !== '')
         .map(msg => ({
             role: msg.role === 'assistant' ? 'model' : 'user',
             content: msg.content,
         }));
 
-    let contextText = "";
-
-    // Step 2: Handle file context if present
+    // Step 2: Handle file context if present.
     if (file) {
-      if (file.type.startsWith("image/")) {
-        try {
+      let contextText = "";
+      try {
+        if (file.type.startsWith("image/")) {
           const photoDataUri = await fileToDataUri(file);
           const description = await decodeImage({ photoDataUri, model });
           contextText = `Contexte de l'image jointe: ${description.description}.`;
-        } catch (error) {
-          console.error("Error decoding image:", error);
-          return { response: '', error: "Erreur lors de l'analyse de l'image." };
-        }
-      } else { 
-        try {
+        } else { 
           const documentContent = await extractTextFromFile(file);
-          if (!documentContent.trim()) {
+           if (!documentContent.trim()) {
               return { response: '', error: `Le fichier ${file.name} est vide ou illisible.` };
           }
           const summary = await summarizeDocument({ documentContent, format: "text", model });
           contextText = `Contexte du document (${file.name}): ${summary.summary}.`;
-        } catch (error: any) {
-          console.error("Error processing document:", error);
-          return { response: '', error: `Erreur lors du traitement du fichier: ${error.message}` };
         }
+      } catch (error: any) {
+         console.error("Error processing file:", error);
+         return { response: '', error: `Erreur lors du traitement du fichier: ${error.message}` };
+      }
+
+      // Inject context into the LAST user message.
+      const lastUserMessageIndex = genkitHistory.map(m => m.role).lastIndexOf('user');
+      if (lastUserMessageIndex !== -1) {
+          // If there's text with the file, combine them.
+          if(genkitHistory[lastUserMessageIndex].content) {
+            genkitHistory[lastUserMessageIndex].content = `${contextText}\n\nMessage de l'utilisateur: ${genkitHistory[lastUserMessageIndex].content}`.trim();
+          } else {
+            // If there's only a file, the context is the message.
+            genkitHistory[lastUserMessageIndex].content = contextText;
+          }
+      } else {
+          // If no user message exists (e.g., file sent alone in a new chat), create one.
+          genkitHistory.push({ role: 'user', content: contextText });
       }
     }
-
-    // Step 3: Robustly combine context and user message
-    const lastMessage = genkitHistory.length > 0 ? genkitHistory[genkitHistory.length - 1] : null;
-
-    if (contextText) {
-        if (lastMessage && lastMessage.role === 'user') {
-            // Inject context into the last user message
-            lastMessage.content = `${contextText}\n\nMessage de l'utilisateur: ${lastMessage.content}`.trim();
-        } else {
-            // If there's no user message to inject into (e.g., file sent alone), create one
-            genkitHistory.push({ role: 'user', content: contextText });
-        }
-    }
     
-    // Final check to prevent sending an empty request
+    // Final safety check to prevent sending an empty request.
     if (genkitHistory.length === 0) {
         console.error("handleChat determined history is empty before calling AI flow.");
-        return { response: '', error: "Impossible d'envoyer une conversation vide." };
+        return { response: '', error: "Impossible d'envoyer une requête vide." };
     }
     
-    // Step 4: Call the AI flow with clean, validated data
+    // Step 3: Call the AI flow with clean, validated data
     const chatResult = await multilingualChat({ 
       messages: genkitHistory,
       persona: agentContext?.persona,
@@ -125,8 +121,7 @@ export async function handleChat(
       model: model,
     });
     
-    const responseText = chatResult?.response ?? '';
-    return { response: responseText, error: null };
+    return { response: chatResult.response, error: null };
 
   } catch (error: any) {
       console.error("Error in handleChat:", error);
