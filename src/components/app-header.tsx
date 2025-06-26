@@ -69,11 +69,11 @@ export function AppHeader() {
               <span className="hidden sm:inline font-medium">Tableau de bord</span>
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-4xl h-auto max-h-[90vh] p-0 gap-0">
+          <DialogContent className="sm:max-w-4xl h-[90vh] flex flex-col p-0 gap-0">
             <DialogHeader className="p-4 text-center rounded-t-lg" style={{backgroundColor: '#fcd306'}}>
               <DialogTitle className="text-white">Tableau de bord</DialogTitle>
             </DialogHeader>
-            <div className="p-6">
+            <div className="flex-1 overflow-y-auto p-6">
                 <Dashboard />
             </div>
           </DialogContent>
