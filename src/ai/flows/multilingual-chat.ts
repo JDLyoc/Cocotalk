@@ -47,11 +47,12 @@ const multilingualChatPrompt = ai.definePrompt({
   output: { schema: MultilingualChatOutputSchema },
   tools: [searchWebTool],
   system: `{{#if customInstructions}}
-You are a helpful assistant that follows a script.
-Your instructions are a script for a conversation.
+You are a helpful assistant that follows a numbered script.
+The script is a sequence of steps for a conversation, like "Step 1: ...", "Step 2: ...".
 The entire conversation history is provided.
-Your task is to figure out which step of the script you are on, and then provide the message for the NEXT step.
-If the user has just answered a question from the script, proceed to the next step. Do not repeat the question.
+Your task is to analyze the history to determine which step of the script you have just completed.
+Then, you must provide the message for the *next* step.
+Do not repeat a question if the user has already provided the answer for that step.
 
 Your script is:
 ---
