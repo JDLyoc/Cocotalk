@@ -148,7 +148,7 @@ export default function Home() {
       }
     });
     return () => unsubscribe();
-  }, [toast]);
+  }, []);
 
   React.useEffect(() => {
     if (!isAuthReady || !currentUser) {
@@ -186,7 +186,7 @@ export default function Home() {
     });
 
     return () => unsubscribe();
-}, [isAuthReady, currentUser, toast, isDataLoading, activeConversationId, activeCocotalkId]);
+}, [isAuthReady, currentUser, isDataLoading, activeConversationId, activeCocotalkId]);
 
 React.useEffect(() => {
     if (!isAuthReady || !currentUser) return;
@@ -212,7 +212,7 @@ React.useEffect(() => {
     });
 
     return () => unsubscribe();
-  }, [isAuthReady, currentUser, toast]);
+  }, [isAuthReady, currentUser]);
 
 const handleSendMessage = async (text: string, file: File | null) => {
     if (!currentUser) {
@@ -224,8 +224,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
 
     setIsLoading(true);
 
-    const currentHistory: StoredMessage[] = activeConversation?.messages || [];
-
+    const originalConversations = conversations;
     const userMessage: StoredMessage = {
         id: Date.now().toString(),
         role: 'user',
@@ -233,13 +232,12 @@ const handleSendMessage = async (text: string, file: File | null) => {
         ...(file && { file: { name: file.name, type: file.type } }),
     };
 
-    // Optimistic UI update: display user message immediately
     if (activeConversationId) {
-      const updatedMessages = [...currentHistory, userMessage];
-      const updatedConversations = conversations.map(c => 
-        c.id === activeConversationId ? { ...c, messages: updatedMessages } : c
-      );
-      setConversations(updatedConversations);
+        const updatedMessages = [...(activeConversation?.messages || []), userMessage];
+        const updatedConversations = conversations.map(c => 
+            c.id === activeConversationId ? { ...c, messages: updatedMessages } : c
+        );
+        setConversations(updatedConversations);
     }
 
     try {
@@ -263,9 +261,8 @@ const handleSendMessage = async (text: string, file: File | null) => {
                 title: "Erreur de l'IA",
                 description: result.error,
             });
-             // Revert optimistic update on error
             if (activeConversationId) {
-              setConversations(conversations);
+                setConversations(originalConversations);
             }
         }
         
@@ -280,9 +277,8 @@ const handleSendMessage = async (text: string, file: File | null) => {
             title: "Erreur",
             description: e.message || "Une erreur est survenue. Veuillez réessayer.",
         });
-        // Revert optimistic update on critical error
         if (activeConversationId) {
-          setConversations(conversations);
+            setConversations(originalConversations);
         }
     } finally {
         setIsLoading(false);
