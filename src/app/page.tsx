@@ -4,7 +4,7 @@
 import * as React from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ChatPanel } from "@/components/chat-panel";
-import { standardChat, cocotalkChat } from "@/lib/actions";
+import { processUserMessage } from "@/lib/actions";
 import { useToast } from "@/hooks/use-toast";
 import { AppHeader } from "@/components/app-header";
 import { auth, db } from "@/lib/firebase";
@@ -43,12 +43,6 @@ export interface StoredMessage {
       name: string;
       type: string;
   };
-}
-
-// Interface for messages sent to API
-export interface ApiMessage {
-  role: "user" | "model";
-  content: string;
 }
 
 // Interface for conversations passed to components
@@ -192,7 +186,7 @@ export default function Home() {
     });
 
     return () => unsubscribe();
-}, [isAuthReady, currentUser, toast]);
+}, [isAuthReady, currentUser, toast, isDataLoading, activeConversationId, activeCocotalkId]);
 
 React.useEffect(() => {
     if (!isAuthReady || !currentUser) return;
@@ -230,82 +224,53 @@ const handleSendMessage = async (text: string, file: File | null) => {
 
     setIsLoading(true);
 
+    const currentHistory: StoredMessage[] = activeConversation?.messages || [];
+
+    const userMessage: StoredMessage = {
+        id: Date.now().toString(),
+        role: 'user',
+        content: messageContent,
+        ...(file && { file: { name: file.name, type: file.type } }),
+    };
+
+    // Optimistic UI update: display user message immediately
+    if (activeConversationId) {
+      const updatedMessages = [...currentHistory, userMessage];
+      const updatedConversations = conversations.map(c => 
+        c.id === activeConversationId ? { ...c, messages: updatedMessages } : c
+      );
+      setConversations(updatedConversations);
+    }
+
     try {
-        let convId = activeConversationId;
-        const currentHistory: ApiMessage[] = [];
-
-        if (convId) {
-            const currentConv = conversations.find(c => c.id === convId);
-            if (currentConv?.messages) {
-                currentHistory.push(...currentConv.messages.map(({ role, content }) => ({ role, content })));
-            }
-        }
-
-        const userMessage: ApiMessage = {
-            role: "user",
-            content: messageContent,
-        };
-        const tempHistoryForApi = [...currentHistory, userMessage];
-
-        let response: string | null = null;
-        let error: string | null = null;
-
-        if (activeCocotalk) {
-            const result = await cocotalkChat({
-                messages: tempHistoryForApi,
-                file,
+        const result = await processUserMessage({
+            userId: currentUser.uid,
+            conversationId: activeConversationId,
+            message: userMessage,
+            file: file,
+            model: model,
+            cocotalkContext: activeCocotalk ? {
+                originId: activeCocotalk.id,
+                title: activeCocotalk.title,
                 persona: activeCocotalk.persona,
-                rules: activeCocotalk.instructions,
-                model,
-            });
-            response = result.response;
-            error = result.error;
-        } else {
-            const result = await standardChat({
-                messages: tempHistoryForApi,
-                file,
-                model,
-            });
-            response = result.response;
-            error = result.error;
-        }
+                instructions: activeCocotalk.instructions
+            } : null,
+        });
 
-        if (error) {
+        if (result.error) {
             toast({
                 variant: "destructive",
                 title: "Erreur de l'IA",
-                description: error,
+                description: result.error,
             });
-            return;
+             // Revert optimistic update on error
+            if (activeConversationId) {
+              setConversations(conversations);
+            }
         }
-
-        const modelMessage: StoredMessage = {
-            id: (Date.now() + 1).toString(),
-            role: 'model',
-            content: response || 'Désolé, je n\'ai pas pu générer de réponse.',
-        };
         
-        const userMessageToStore: StoredMessage = {
-            id: Date.now().toString(),
-            role: 'user',
-            content: messageContent,
-            ...(file && { file: { name: file.name, type: file.type } }),
-        };
-
-        if (convId) {
-            const conversationRef = doc(db, "users", currentUser.uid, "conversations", convId);
-            await updateDoc(conversationRef, { messages: [...currentHistory.map(m => ({...m, id: Date.now().toString()})), userMessageToStore, modelMessage] });
-        } else {
-            const newTitle = text.substring(0, 30).trim() || file?.name || (activeCocotalk?.title || "Nouvelle Conversation");
-            const newConvData = {
-                title: newTitle,
-                messages: [userMessageToStore, modelMessage],
-                userId: currentUser.uid,
-                createdAt: serverTimestamp(),
-                ...(activeCocotalk && { cocotalkOriginId: activeCocotalk.id }),
-            };
-            const conversationRef = await addDoc(collection(db, "users", currentUser.uid, "conversations"), newConvData);
-            selectConversation(conversationRef.id);
+        if (result.newConversationId && !activeConversationId) {
+            selectConversation(result.newConversationId);
         }
 
     } catch (e: any) {
@@ -315,6 +280,10 @@ const handleSendMessage = async (text: string, file: File | null) => {
             title: "Erreur",
             description: e.message || "Une erreur est survenue. Veuillez réessayer.",
         });
+        // Revert optimistic update on critical error
+        if (activeConversationId) {
+          setConversations(conversations);
+        }
     } finally {
         setIsLoading(false);
     }

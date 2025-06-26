@@ -6,6 +6,15 @@ import { decodeImage } from "@/ai/flows/image-decoder";
 import { summarizeDocument } from "@/ai/flows/summarize-document";
 import type { StoredMessage } from "@/app/page";
 import type { Message } from "genkit";
+import { db } from "./firebase";
+import {
+  collection,
+  addDoc,
+  updateDoc,
+  doc,
+  serverTimestamp,
+  arrayUnion,
+} from "firebase/firestore";
 
 // ===== FILE PROCESSING UTILITIES =====
 async function fileToDataUri(file: File): Promise<string> {
@@ -46,14 +55,16 @@ async function extractTextFromFile(file: File): Promise<string> {
 }
 
 /**
- * Injects file context into the last user message of the history.
+ * Injects file context into the user message content.
  */
 async function processAndInjectFileContext(
-    history: Message[],
+    userMessage: StoredMessage,
     file: File,
     model: string
-): Promise<Message[]> {
+): Promise<StoredMessage> {
     let contextText = "";
+    const updatedMessage = { ...userMessage };
+
     try {
         if (file.type.startsWith("image/")) {
             const photoDataUri = await fileToDataUri(file);
@@ -72,91 +83,90 @@ async function processAndInjectFileContext(
         console.error("Error processing file:", error);
         throw new Error(`Erreur lors du traitement du fichier: ${error.message}`);
     }
-
-    const newHistory = [...history];
-    const lastUserMessageIndex = newHistory.map(m => m.role).lastIndexOf('user');
-
-    if (lastUserMessageIndex !== -1) {
-        const userMessage = newHistory[lastUserMessageIndex];
-        // Prepend context to the last user message.
-        userMessage.content = `${contextText}\n\nMessage de l'utilisateur: ${userMessage.content}`.trim();
-    } else {
-        // This case should ideally not happen if client-side validation is good,
-        // but as a fallback, create a new user message.
-        newHistory.push({
-            role: 'user',
-            content: contextText,
-        });
-    }
     
-    return newHistory;
+    // Prepend context to the user message.
+    updatedMessage.content = `${contextText}\n\nMessage de l'utilisateur: ${updatedMessage.content}`.trim();
+    return updatedMessage;
 }
 
 
 // ===== CORE CHAT LOGIC =====
-interface BaseChatInput {
-  messages: StoredMessage[];
+interface CocotalkContext {
+    originId: string;
+    title: string;
+    persona?: string;
+    instructions: string;
+}
+
+interface ProcessMessageInput {
+  userId: string;
+  conversationId: string | null;
+  message: StoredMessage;
   file: File | null;
   model: string;
+  cocotalkContext: CocotalkContext | null;
 }
 
-interface CocotalkChatInput extends BaseChatInput {
-  persona?: string;
-  rules: string;
-}
+export async function processUserMessage(input: ProcessMessageInput): Promise<{ newConversationId?: string; error?: string }> {
+    const { userId, conversationId, message, file, model, cocotalkContext } = input;
 
-async function handleChat(
-    history: StoredMessage[],
-    file: File | null,
-    model: string,
-    cocotalkContext?: { persona?: string; rules: string; }
-): Promise<{ response: string | null; error: string | null }> {
     try {
-        let processedHistory: Message[] = history.map(({ role, content }) => ({ role, content }));
-
-        // Step 1: Inject file context if a file is provided
+        let userMessageToProcess = message;
+        
         if (file) {
-            processedHistory = await processAndInjectFileContext(processedHistory, file, model);
+            userMessageToProcess = await processAndInjectFileContext(message, file, model);
         }
 
-        // Step 2: Call the Genkit flow with the processed history
-        const { response, error } = await multilingualChat({
-            messages: processedHistory,
+        const historyForAI: Message[] = [];
+        if (conversationId) {
+            // In a real app, you would fetch existing messages here.
+            // For this flow, we assume the client manages history and we just need the new message.
+        }
+        historyForAI.push({ role: userMessageToProcess.role, content: userMessageToProcess.content });
+
+        const aiResult = await multilingualChat({
+            messages: historyForAI,
             persona: cocotalkContext?.persona,
-            rules: cocotalkContext?.rules,
+            rules: cocotalkContext?.instructions,
             model: model,
         });
 
-        // Step 3: Handle the response from the flow
-        if (error) {
-            return { response: null, error };
+        if (aiResult.error) {
+            return { error: aiResult.error };
         }
 
-        return { response, error: null };
+        const modelMessage: StoredMessage = {
+            id: (Date.now() + 1).toString(),
+            role: 'model',
+            content: aiResult.response || 'Désolé, je n\'ai pas pu générer de réponse.',
+        };
+
+        let finalConversationId = conversationId;
+
+        if (finalConversationId) {
+            // Update existing conversation
+            const conversationRef = doc(db, "users", userId, "conversations", finalConversationId);
+            await updateDoc(conversationRef, {
+                messages: arrayUnion(userMessageToProcess, modelMessage)
+            });
+        } else {
+            // Create new conversation
+            const newTitle = cocotalkContext?.title || userMessageToProcess.content.substring(0, 30).trim() || "Nouvelle Conversation";
+            const newConvData = {
+                title: newTitle,
+                messages: [userMessageToProcess, modelMessage],
+                userId: userId,
+                createdAt: serverTimestamp(),
+                ...(cocotalkContext && { cocotalkOriginId: cocotalkContext.originId }),
+            };
+            const conversationRef = await addDoc(collection(db, "users", userId, "conversations"), newConvData);
+            finalConversationId = conversationRef.id;
+        }
+
+        return { newConversationId: finalConversationId };
 
     } catch (error: any) {
-        console.error("Critical error in handleChat:", error);
-        return { response: null, error: error.message || "Une erreur inconnue est survenue." };
+        console.error("Critical error in processUserMessage:", error);
+        return { error: error.message || "Une erreur inconnue est survenue." };
     }
-}
-
-
-// ===== EXPORTED SERVER ACTIONS (WRAPPERS) =====
-
-/**
- * Handles a standard chat conversation.
- */
-export async function standardChat(input: BaseChatInput): Promise<{ response: string | null; error: string | null }> {
-  return handleChat(input.messages, input.file, input.model);
-}
-
-/**
- * Handles a conversation with a custom assistant (Cocotalk).
- */
-export async function cocotalkChat(input: CocotalkChatInput): Promise<{ response: string | null; error: string | null }> {
-  const cocotalkContext = {
-    persona: input.persona,
-    rules: input.rules,
-  };
-  return handleChat(input.messages, input.file, input.model, cocotalkContext);
 }
