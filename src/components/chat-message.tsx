@@ -56,7 +56,7 @@ export function ChatMessage({ role, content }: Omit<DisplayMessage, 'id' | 'text
         className={cn(
           "max-w-md rounded-lg p-3 text-sm",
           isUser
-            ? "bg-secondary text-secondary-foreground"
+            ? "bg-card border"
             : "bg-card border"
         )}
       >
@@ -64,7 +64,7 @@ export function ChatMessage({ role, content }: Omit<DisplayMessage, 'id' | 'text
       </div>
       {isUser && (
         <Avatar className="h-9 w-9 border">
-          <AvatarFallback className="bg-[#3C63A6] text-white">
+          <AvatarFallback className="text-white" style={{backgroundColor: '#3C63A6'}}>
             {getInitials(user.name, user.email)}
           </AvatarFallback>
         </Avatar>
