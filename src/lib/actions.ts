@@ -4,7 +4,7 @@
 import { multilingualChat } from "@/ai/flows/multilingual-chat";
 import { decodeImage } from "@/ai/flows/image-decoder";
 import { summarizeDocument } from "@/ai/flows/summarize-document";
-import type { StoredMessage } from "@/app/page";
+import type { Message } from "genkit";
 
 const mammoth = require('mammoth');
 import * as xlsx from 'xlsx';
@@ -54,23 +54,15 @@ interface AgentContext {
 }
 
 export async function handleChat(
-  history: StoredMessage[],
+  history: Message[],
   file: File | null,
   agentContext: AgentContext,
 ) {
   try {
     let contextText = "";
-
-    // This is a robust filter to ensure that any corrupted data from Firestore
-    // does not crash the application. It validates that each message is a proper
-    // object with the required string properties.
-    const validHistory = (history || []).filter(
-        (m): m is StoredMessage =>
-            m &&
-            typeof m === 'object' &&
-            typeof m.role === 'string' &&
-            typeof m.content === 'string'
-    );
+    
+    // The history is already translated and filtered from the client.
+    const apiMessages = [...history]; // Make a mutable copy.
 
     if (file) {
       if (file.type.startsWith("image/")) {
@@ -99,19 +91,12 @@ export async function handleChat(
 
     // Prepend file context to the last user message if it exists
     if (contextText) {
-      const lastMessage = validHistory[validHistory.length - 1];
+      const lastMessage = apiMessages[apiMessages.length - 1];
       if (lastMessage && lastMessage.role === 'user') {
           lastMessage.content = `${contextText}\n\nMessage de l'utilisateur: ${lastMessage.content}`;
       }
     }
     
-    const apiMessages = validHistory
-      .filter(m => m.role === 'user' || m.role === 'assistant')
-      .map(m => ({
-          role: m.role === 'user' ? 'user' : 'model',
-          content: m.content,
-      }));
-
     if (apiMessages.length === 0) {
         if (contextText) {
             apiMessages.push({ role: 'user', content: contextText });
@@ -126,7 +111,6 @@ export async function handleChat(
       rules: agentContext?.rules,
     });
     
-    // Defensive coding: ensure response is a string, even if the flow fails unexpectedly.
     const responseText = chatResult?.response ?? '';
     return { response: responseText, error: null };
 

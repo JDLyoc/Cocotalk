@@ -24,6 +24,7 @@ import {
   setDoc,
 } from "firebase/firestore";
 import type { CocotalkFormValues } from "@/components/cocotalk-form";
+import type { Message } from "genkit";
 
 // Interface for messages passed to components (with ReactNode)
 export interface DisplayMessage {
@@ -128,7 +129,6 @@ export default function Home() {
   React.useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // Ensure user document exists in Firestore
         const userDocRef = doc(db, "users", user.uid);
         await setDoc(userDocRef, { lastLogin: serverTimestamp() }, { merge: true });
         setIsAuthReady(true);
@@ -222,16 +222,17 @@ const handleSendMessage = async (text: string, file: File | null) => {
     let convRef;
 
     try {
-        // --- Phase 1: Create conversation if it doesn't exist ---
         if (!currentChatId) {
             const newTitle = activeCocotalk ? activeCocotalk.title : (text ? text.split(' ').slice(0, 3).join(' ') + (text.split(' ').length > 3 ? '...' : '') : file?.name || "New Conversation");
-            
-            const newConvRef = await addDoc(collection(db, "users", userId, "conversations"), {
+            const newConvData: Omit<StoredConversation, 'id' | 'createdAt'> = {
                 title: newTitle,
                 messages: [],
-                createdAt: serverTimestamp(),
                 userId: userId,
                 ...(activeCocotalk && { cocotalkOriginId: activeCocotalk.id }),
+            };
+            const newConvRef = await addDoc(collection(db, "users", userId, "conversations"), {
+                ...newConvData,
+                createdAt: serverTimestamp(),
             });
             currentChatId = newConvRef.id;
             convRef = newConvRef;
@@ -240,36 +241,37 @@ const handleSendMessage = async (text: string, file: File | null) => {
             convRef = doc(db, "users", userId, "conversations", currentChatId);
         }
 
-        // --- Phase 2: Prepare and save user message ---
         const currentStoredConversation = conversations.find(c => c.id === currentChatId);
         const validStoredMessages = (currentStoredConversation?.messages || []).filter(
             (m): m is StoredMessage => m && typeof m.role === 'string' && typeof m.content === 'string'
         );
 
-        let messagesToStore: StoredMessage[] = [...validStoredMessages];
-
-        // Add greeting message for a new Cocotalk conversation
-        if(activeCocotalk && messagesToStore.length === 0 && activeCocotalk.greetingMessage) {
+        let baseMessages: StoredMessage[] = [...validStoredMessages];
+        if (activeCocotalk && baseMessages.length === 0 && activeCocotalk.greetingMessage) {
             const greetingMessage: StoredMessage = {
                 id: Date.now().toString() + 'g',
                 role: 'assistant',
                 content: activeCocotalk.greetingMessage,
             };
-            messagesToStore.push(greetingMessage);
+            baseMessages.push(greetingMessage);
         }
-        
+
         const userMessage: StoredMessage = {
             id: Date.now().toString(),
             role: "user",
             content: text,
             ...(file && { file: { name: file.name, type: file.type } }),
         };
-        messagesToStore.push(userMessage);
 
-        // Update Firestore immediately with the user's message for instant feedback
-        await updateDoc(convRef, { messages: messagesToStore });
+        await updateDoc(convRef, { messages: [...baseMessages, userMessage] });
 
-        // --- Phase 3: Call AI and save assistant's response ---
+        const messagesForGenkit = [...baseMessages, userMessage]
+            .map(msg => ({
+                role: msg.role === 'assistant' ? 'model' : 'user',
+                content: msg.content
+            }))
+            .filter(msg => msg.role === 'user' || msg.role === 'model') as Message[];
+
         let agentContext: { persona?: string; rules?: string; };
         if (activeCocotalk) {
             agentContext = { persona: activeCocotalk.persona, rules: activeCocotalk.instructions };
@@ -282,21 +284,19 @@ const handleSendMessage = async (text: string, file: File | null) => {
             agentContext = { persona: "A friendly and helpful assistant.", rules: "Your job is to have a simple, helpful conversation. Respond clearly and concisely to the user's questions." };
         }
 
-        const { response, error } = await handleChat(messagesToStore, file, agentContext);
+        const { response, error } = await handleChat(messagesForGenkit, file, agentContext);
         
         if (error) {
             throw new Error(error);
         }
 
-        // Defensive coding: ensure response is a string before saving.
         const assistantMessage: StoredMessage = {
             id: Date.now().toString() + 'a',
             role: 'assistant',
             content: typeof response === 'string' ? response : '', 
         };
         
-        // Update Firestore with the final history including the assistant's message
-        await updateDoc(convRef, { messages: [...messagesToStore, assistantMessage] });
+        await updateDoc(convRef, { messages: [...baseMessages, userMessage, assistantMessage] });
 
     } catch (e: any) {
         const errorMsg = e.message || "An error occurred. Please try again.";
@@ -309,7 +309,6 @@ const handleSendMessage = async (text: string, file: File | null) => {
         setIsLoading(false);
     }
 };
-
 
   const createNewChat = async () => {
     if (!auth.currentUser) return;
@@ -428,7 +427,6 @@ const handleSendMessage = async (text: string, file: File | null) => {
     return <AppSkeleton />;
   }
 
-  // This function is "paranoid" and will never crash, even if Firestore data is corrupted.
   const toDisplayMessages = (messages: StoredMessage[] | undefined): DisplayMessage[] => {
     if (!Array.isArray(messages)) {
         return [];
@@ -446,8 +444,6 @@ const handleSendMessage = async (text: string, file: File | null) => {
                 return null;
             }
 
-            // CRITICAL FIX: Ensure `content` is a string. If it's `null`, `undefined`,
-            // or anything else, replace it with an empty string.
             const textContent = (typeof content === 'string') ? content : '';
             
             let contentNode: React.ReactNode;
@@ -464,7 +460,6 @@ const handleSendMessage = async (text: string, file: File | null) => {
                     </>
                 );
             } else {
-                // The .replace() operation is now GUARANTEED to be called on a string.
                 const finalHtml = textContent.replace(/\n/g, '<br />');
                 contentNode = <p className="!my-0" dangerouslySetInnerHTML={{ __html: finalHtml }} />;
             }
