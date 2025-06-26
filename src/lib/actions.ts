@@ -69,7 +69,6 @@ export async function handleChat(
             m &&
             typeof m === 'object' &&
             typeof m.role === 'string' &&
-            // CRITICAL: We also ensure `content` is a string to avoid passing nulls.
             typeof m.content === 'string'
     );
 
@@ -102,7 +101,6 @@ export async function handleChat(
     if (contextText) {
       const lastMessage = validHistory[validHistory.length - 1];
       if (lastMessage && lastMessage.role === 'user') {
-          // Note: `content` is guaranteed to be a string here due to the filter above.
           lastMessage.content = `${contextText}\n\nMessage de l'utilisateur: ${lastMessage.content}`;
       }
     }
@@ -111,15 +109,11 @@ export async function handleChat(
       .filter(m => m.role === 'user' || m.role === 'assistant')
       .map(m => ({
           role: m.role === 'user' ? 'user' : 'model',
-          // `content` is guaranteed to be a string.
           content: m.content,
       }));
 
     if (apiMessages.length === 0) {
-        // This case can happen if the user sends only a file and no text.
-        // We need to handle this gracefully.
         if (contextText) {
-            // Create a temporary message with the context for the AI.
             apiMessages.push({ role: 'user', content: contextText });
         } else {
             return { response: '', error: "Impossible d'envoyer une conversation vide." };

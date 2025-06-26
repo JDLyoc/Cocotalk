@@ -37,7 +37,7 @@ export interface DisplayMessage {
 export interface StoredMessage {
   id: string;
   role: "user" | "assistant" | "system";
-  content: string;
+  content: string; // This should always be a string, but we can't trust the DB
   file?: {
       name: string;
       type: string;
@@ -229,7 +229,6 @@ const handleSendMessage = async (text: string, file: File | null) => {
     if (origin) {
         agentContext = { persona: origin.persona, rules: origin.instructions };
     } else {
-        // This is the fix: Handle the case where the origin Cocotalk was deleted.
         agentContext = { 
             persona: "A helpful assistant.",
             rules: "You are a helpful assistant. The custom instructions for this conversation could not be found because the original agent was deleted. Inform the user about this and then proceed with the conversation as a general-purpose assistant."
@@ -261,7 +260,6 @@ const handleSendMessage = async (text: string, file: File | null) => {
       
       const currentStoredConversation = conversations.find(c => c.id === currentChatId);
       
-      // Robust filtering to prevent crashes from malformed data in Firestore
       const validStoredMessages = (currentStoredConversation?.messages || []).filter(
           (m): m is StoredMessage => m && typeof m.role === 'string' && typeof m.content === 'string'
       );
@@ -292,11 +290,12 @@ const handleSendMessage = async (text: string, file: File | null) => {
           throw new Error(error);
       }
 
+      // BLINDAGE DE L'ÉCRITURE : On s'assure que la réponse est bien une chaîne avant de la sauvegarder.
+      // Cela empêche l'enregistrement de `content: null` dans Firestore.
       const assistantMessage: StoredMessage = {
           id: Date.now().toString() + 'a',
           role: 'assistant',
-          // Defensive coding: ensure content is always a string before storing
-          content: response || '', 
+          content: typeof response === 'string' ? response : '', 
       };
       await updateDoc(convRef, { messages: [...messagesToStore, assistantMessage] });
 
@@ -430,31 +429,36 @@ const handleSendMessage = async (text: string, file: File | null) => {
     return <AppSkeleton />;
   }
 
-  // This function is now heavily "armored" against corrupted data.
+  // BLINDAGE DE LA LECTURE : Cette fonction est rendue "paranoïaque" pour ne jamais planter,
+  // même si les données dans Firestore sont corrompues.
   const toDisplayMessages = (messages: StoredMessage[]): DisplayMessage[] => {
-    // 1. Ensure `messages` is an array. If not, return an empty array.
+    // Étape 1 : S'assurer que nous avons bien un tableau.
     if (!Array.isArray(messages)) {
         return [];
     }
 
-    // 2. Filter the array to only keep valid message objects.
+    // Étape 2 : Filtrer et transformer les messages de manière sécurisée.
     return messages
-        .filter((m): m is StoredMessage => {
-            // A message is valid ONLY if it's an object with a string `id` and a valid `role`.
-            // The `content` can be a string or null at this stage, we'll handle that next.
-            return m &&
-                   typeof m === 'object' &&
-                   typeof m.id === 'string' &&
-                   (m.role === 'user' || m.role === 'assistant' || m.role === 'system');
-        })
         .map(msg => {
-            // 3. ARMOR PLATING: Defensively handle the `content` of each valid message.
-            // If `msg.content` is null, undefined, or not a string, treat it as an empty string.
-            const textContent = (typeof msg.content === 'string') ? msg.content : '';
+            // Ignorer les entrées qui ne sont pas des objets valides.
+            if (!msg || typeof msg !== 'object') {
+                return null;
+            }
+            
+            const { id, role, content } = msg;
+
+            // Ignorer les messages qui n'ont pas un id et un rôle valides.
+            if (typeof id !== 'string' || !['user', 'assistant', 'system'].includes(role)) {
+                return null;
+            }
+
+            // C'est le correctif CRITIQUE : s'assurer que `content` est une chaîne de caractères.
+            // Si c'est `null`, `undefined`, ou autre chose, on le remplace par une chaîne vide.
+            const textContent = (typeof content === 'string') ? content : '';
             
             let contentNode: React.ReactNode;
 
-            if (msg.role === 'user') {
+            if (role === 'user') {
                 contentNode = (
                     <>
                         <p className="!my-0">{textContent}</p>
@@ -466,20 +470,21 @@ const handleSendMessage = async (text: string, file: File | null) => {
                     </>
                 );
             } else {
-                // The .replace() operation is now GUARANTEED to be called on a string.
-                // This makes it impossible for `Cannot read properties of null (reading 'replace')` to occur here.
+                // L'opération .replace() est maintenant GARANTIE d'être appelée sur une chaîne.
                 const finalHtml = textContent.replace(/\n/g, '<br />');
                 contentNode = <p className="!my-0" dangerouslySetInnerHTML={{ __html: finalHtml }} />;
             }
             
             return {
-              id: msg.id,
-              role: msg.role,
+              id: id,
+              role: role as DisplayMessage['role'],
               content: contentNode,
               text_content: textContent,
             };
-        });
-    };
+        })
+        // Étape 3 : Retirer tous les messages qui ont été jugés invalides (null).
+        .filter((m): m is DisplayMessage => m !== null);
+  };
 
   const displayConversations: DisplayConversation[] = conversations.map(conv => ({
     id: conv.id,

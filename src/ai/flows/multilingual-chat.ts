@@ -76,13 +76,17 @@ You have access to a web search tool. Use it by calling 'searchWeb' when you nee
       tools: [searchWebTool],
     });
 
-    // DEFENSIVE CODING: This is the critical fix.
-    // We safely access the 'text' property using optional chaining (`?.`).
-    // If 'text' is null or undefined (e.g., due to safety blocks, tool calls, or API errors),
-    // the nullish coalescing operator (`??`) provides an empty string as a fallback.
-    // This prevents the application from ever trying to call a method on `null`.
+    // DEFENSIVE RESPONSE HANDLING: This is the definitive fix at the source.
+    // We do not trust the API response. It might be missing the 'text' field if the
+    // request was blocked for safety, if it was a tool call, or if an error occurred.
+    //
+    // `genkitResponse?.text` safely accesses the 'text' property. If `genkitResponse`
+    // is null or undefined, it returns undefined instead of crashing.
+    // `?? ''` (nullish coalescing) ensures that if the result is null or undefined,
+    // we get a safe, empty string as a fallback.
     const text = genkitResponse?.text ?? '';
 
+    // We now guarantee that we are returning an object that matches our defined output schema.
     return { response: text };
   }
 );
