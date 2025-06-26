@@ -429,13 +429,14 @@ const handleSendMessage = async (text: string, file: File | null) => {
   }
 
   const toDisplayMessages = (messages: StoredMessage[]): DisplayMessage[] => {
+    // Filter for messages that have a valid structure. This is a lenient check.
     const validMessages = (messages || []).filter(
-        (m): m is StoredMessage => m && typeof m.id === 'string' && typeof m.role === 'string' && typeof m.content === 'string'
+        (m): m is StoredMessage => m && typeof m.id === 'string' && typeof m.role === 'string'
     );
     
     return validMessages.map(msg => {
       let contentNode: React.ReactNode;
-      const textContent = msg.content || '';
+      const textContent = msg.content; // Can be string or null/undefined from Firestore
 
       if (msg.role === 'user') {
           contentNode = (
@@ -449,13 +450,16 @@ const handleSendMessage = async (text: string, file: File | null) => {
               </>
           );
       } else {
-          contentNode = <p className="!my-0" dangerouslySetInnerHTML={{ __html: textContent.replace(/\n/g, '<br />') }} />;
+          // This is the guaranteed fix. We explicitly check if content is a string.
+          // If it is, we use it. If it's null or undefined, we treat it as an empty string.
+          const finalHtml = typeof textContent === 'string' ? textContent.replace(/\n/g, '<br />') : '';
+          contentNode = <p className="!my-0" dangerouslySetInnerHTML={{ __html: finalHtml }} />;
       }
       return {
         id: msg.id,
         role: msg.role,
         content: contentNode,
-        text_content: textContent,
+        text_content: typeof textContent === 'string' ? textContent : '',
       };
     });
   };
