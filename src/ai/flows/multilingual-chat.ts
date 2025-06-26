@@ -35,12 +35,15 @@ export async function multilingualChat(input: MultilingualChatInput): Promise<Mu
   return multilingualChatFlow(input);
 }
 
+const PromptInputSchema = z.object({
+    persona: z.string().optional(),
+    customInstructions: z.string().optional(),
+    lastUserMessage: z.string(),
+});
+
 const multilingualChatPrompt = ai.definePrompt({
   name: 'multilingualChatPrompt',
-  input: { schema: z.object({
-      persona: z.string().optional(),
-      customInstructions: z.string().optional(),
-  }) },
+  input: { schema: PromptInputSchema },
   output: { schema: MultilingualChatOutputSchema },
   tools: [searchWebTool],
   system: `{{#if customInstructions}}
@@ -63,7 +66,7 @@ Persona to adopt:
 You are a multilingual chatbot that can understand and respond in any language.
 The user will send you a message, and you must respond in the same language as the message.
 {{/if}}`,
-  prompt: ``,
+  prompt: `{{{lastUserMessage}}}`,
 });
 
 const multilingualChatFlow = ai.defineFlow(
@@ -73,15 +76,24 @@ const multilingualChatFlow = ai.defineFlow(
     outputSchema: MultilingualChatOutputSchema,
   },
   async (input) => {
-    const history: Message[] =
-      input.messages?.map((h) => ({
-        role: h.role,
-        content: [{text: h.content}],
-      })) || [];
+    const allMessages = input.messages || [];
+
+    if (allMessages.length === 0) {
+      throw new Error("Cannot process an empty conversation.");
+    }
+    
+    const lastMessage = allMessages[allMessages.length - 1];
+    const historyMessages = allMessages.slice(0, -1);
+
+    const history: Message[] = historyMessages.map((h) => ({
+      role: h.role,
+      content: [{text: h.content}],
+    }));
 
     const promptInput = {
         persona: input.persona,
-        customInstructions: input.customInstructions
+        customInstructions: input.customInstructions,
+        lastUserMessage: lastMessage.content,
     };
     
     const {output} = await multilingualChatPrompt(promptInput, { history });
