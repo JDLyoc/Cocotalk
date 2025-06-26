@@ -8,7 +8,7 @@ import { standardChat, cocotalkChat } from "@/lib/actions";
 import { useToast } from "@/hooks/use-toast";
 import { AppHeader } from "@/components/app-header";
 import { auth, db } from "@/lib/firebase";
-import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
+import { signInAnonymously, onAuthStateChanged, User } from "firebase/auth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useModel } from "@/contexts/model-context";
 import {
@@ -128,6 +128,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = React.useState(false);
   const [isAuthReady, setIsAuthReady] = React.useState(false);
   const [isDataLoading, setIsDataLoading] = React.useState(true);
+  const [currentUser, setCurrentUser] = React.useState<User | null>(null);
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
   const activeCocotalk = cocotalks.find(c => c.id === activeCocotalkId);
@@ -135,10 +136,13 @@ export default function Home() {
   React.useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        // User is signed in.
         const userDocRef = doc(db, "users", user.uid);
         await setDoc(userDocRef, { lastLogin: serverTimestamp() }, { merge: true });
+        setCurrentUser(user);
         setIsAuthReady(true);
       } else {
+        // User is signed out. Sign in anonymously.
         signInAnonymously(auth).catch(error => {
           console.error("Anonymous sign-in failed:", error);
           toast({
@@ -153,13 +157,14 @@ export default function Home() {
   }, [toast]);
 
   React.useEffect(() => {
-    if (!isAuthReady || !auth.currentUser) {
-        setIsDataLoading(false);
+    if (!isAuthReady || !currentUser) {
         return;
     }
+    
+    setIsDataLoading(true);
 
     const q = query(
-        collection(db, "users", auth.currentUser.uid, "conversations"),
+        collection(db, "users", currentUser.uid, "conversations"),
         orderBy("createdAt", "desc")
     );
 
@@ -187,13 +192,13 @@ export default function Home() {
     });
 
     return () => unsubscribe();
-}, [isAuthReady, isDataLoading, activeConversationId, activeCocotalkId, toast]);
+}, [isAuthReady, currentUser, toast]);
 
 React.useEffect(() => {
-    if (!isAuthReady || !auth.currentUser) return;
+    if (!isAuthReady || !currentUser) return;
     
     const q = query(
-      collection(db, "users", auth.currentUser.uid, "cocotalks"),
+      collection(db, "users", currentUser.uid, "cocotalks"),
       orderBy("createdAt", "desc")
     );
 
@@ -213,148 +218,96 @@ React.useEffect(() => {
     });
 
     return () => unsubscribe();
-  }, [isAuthReady, toast]);
-
-const handleNormalMessage = async (text: string, file: File | null) => {
-  const userId = auth.currentUser!.uid;
-
-  const messageContent = text.trim() || (file ? `Analyse du fichier: ${file.name}` : "");
-  if (!messageContent) {
-    throw new Error("Impossible d'envoyer un message vide.");
-  }
-
-  let convId = activeConversationId;
-  let conversationRef;
-  let currentHistory: StoredMessage[] = [];
-
-  if (convId) {
-    conversationRef = doc(db, "users", userId, "conversations", convId);
-    const currentConv = conversations.find(c => c.id === convId);
-    currentHistory = currentConv?.messages ? [...currentConv.messages] : [];
-  } else {
-    const newTitle = text.substring(0, 30).trim() || file?.name || "Nouvelle Conversation";
-    const newConvData = {
-      title: newTitle,
-      messages: [],
-      userId: userId,
-      createdAt: serverTimestamp(),
-    };
-    conversationRef = await addDoc(collection(db, "users", userId, "conversations"), newConvData);
-    convId = conversationRef.id;
-    selectConversation(convId);
-  }
-
-  const userMessage: StoredMessage = {
-    id: Date.now().toString(),
-    role: "user",
-    content: messageContent,
-    ...(file && { file: { name: file.name, type: file.type } }),
-  };
-
-  const tempHistoryForApi = [...currentHistory, userMessage];
-  const apiHistory = tempHistoryForApi.map(({ role, content }) => ({
-    role: role as 'user' | 'model',
-    content,
-  }));
-
-  const { response, error } = await standardChat({
-    messages: apiHistory,
-    file,
-    model,
-  });
-
-  if (error) {
-    throw new Error(`Une erreur est survenue: ${error}`);
-  }
-
-  const modelMessage: StoredMessage = {
-    id: (Date.now() + 1).toString(),
-    role: 'model',
-    content: response || 'Désolé, je n\'ai pas pu générer de réponse.',
-  };
-  
-  await updateDoc(conversationRef, { messages: [...tempHistoryForApi, modelMessage] });
-};
-  
-const handleCocotalkMessage = async (text: string, file: File | null) => {
-  if (!activeCocotalk) return;
-  const userId = auth.currentUser!.uid;
-  
-  const messageContent = text.trim() || (file ? `Analyse du fichier: ${file.name}` : "");
-  if (!messageContent) {
-    throw new Error("Impossible d'envoyer un message vide.");
-  }
-  
-  let convId = activeConversationId;
-  let conversationRef;
-  let currentHistory: StoredMessage[] = [];
-
-  if (convId) {
-    conversationRef = doc(db, "users", userId, "conversations", convId);
-    const currentConv = conversations.find(c => c.id === convId);
-    currentHistory = currentConv?.messages ? [...currentConv.messages] : [];
-  } else {
-    const newConvData = {
-      title: activeCocotalk.title,
-      messages: [],
-      userId: userId,
-      createdAt: serverTimestamp(),
-      cocotalkOriginId: activeCocotalk.id,
-    };
-    conversationRef = await addDoc(collection(db, "users", userId, "conversations"), newConvData);
-    convId = conversationRef.id;
-    selectConversation(convId);
-  }
-
-  const userMessage: StoredMessage = {
-    id: Date.now().toString(),
-    role: "user",
-    content: messageContent,
-    ...(file && { file: { name: file.name, type: file.type } }),
-  };
-
-  const tempHistoryForApi = [...currentHistory, userMessage];
-  const apiHistory = tempHistoryForApi.map(({ role, content }) => ({
-    role: role as 'user' | 'model',
-    content,
-  }));
-
-  const { response, error } = await cocotalkChat({
-    messages: apiHistory,
-    file,
-    persona: activeCocotalk.persona,
-    rules: activeCocotalk.instructions,
-    model,
-  });
-
-  if (error) {
-    throw new Error(`Une erreur est survenue: ${error}`);
-  }
-
-  const modelMessage: StoredMessage = {
-    id: (Date.now() + 1).toString(),
-    role: 'model',
-    content: response || 'Désolé, je n\'ai pas pu générer de réponse.',
-  };
-  
-  await updateDoc(conversationRef, { messages: [...tempHistoryForApi, modelMessage] });
-};
+  }, [isAuthReady, currentUser, toast]);
 
 const handleSendMessage = async (text: string, file: File | null) => {
-    if (!auth.currentUser) {
+    if (!currentUser) {
         toast({ variant: "destructive", title: "Erreur", description: "Utilisateur non authentifié." });
         return;
     }
-    if (!text.trim() && !file) return;
+    const messageContent = text.trim() || (file ? `Analyse du fichier: ${file.name}` : "");
+    if (!messageContent) return;
 
     setIsLoading(true);
 
     try {
-        if (activeCocotalk) {
-            await handleCocotalkMessage(text, file);
-        } else {
-            await handleNormalMessage(text, file);
+        let convId = activeConversationId;
+        const currentHistory: ApiMessage[] = [];
+
+        if (convId) {
+            const currentConv = conversations.find(c => c.id === convId);
+            if (currentConv?.messages) {
+                currentHistory.push(...currentConv.messages.map(({ role, content }) => ({ role, content })));
+            }
         }
+
+        const userMessage: ApiMessage = {
+            role: "user",
+            content: messageContent,
+        };
+        const tempHistoryForApi = [...currentHistory, userMessage];
+
+        let response: string | null = null;
+        let error: string | null = null;
+
+        if (activeCocotalk) {
+            const result = await cocotalkChat({
+                messages: tempHistoryForApi,
+                file,
+                persona: activeCocotalk.persona,
+                rules: activeCocotalk.instructions,
+                model,
+            });
+            response = result.response;
+            error = result.error;
+        } else {
+            const result = await standardChat({
+                messages: tempHistoryForApi,
+                file,
+                model,
+            });
+            response = result.response;
+            error = result.error;
+        }
+
+        if (error) {
+            toast({
+                variant: "destructive",
+                title: "Erreur de l'IA",
+                description: error,
+            });
+            return;
+        }
+
+        const modelMessage: StoredMessage = {
+            id: (Date.now() + 1).toString(),
+            role: 'model',
+            content: response || 'Désolé, je n\'ai pas pu générer de réponse.',
+        };
+        
+        const userMessageToStore: StoredMessage = {
+            id: Date.now().toString(),
+            role: 'user',
+            content: messageContent,
+            ...(file && { file: { name: file.name, type: file.type } }),
+        };
+
+        if (convId) {
+            const conversationRef = doc(db, "users", currentUser.uid, "conversations", convId);
+            await updateDoc(conversationRef, { messages: [...currentHistory.map(m => ({...m, id: Date.now().toString()})), userMessageToStore, modelMessage] });
+        } else {
+            const newTitle = text.substring(0, 30).trim() || file?.name || (activeCocotalk?.title || "Nouvelle Conversation");
+            const newConvData = {
+                title: newTitle,
+                messages: [userMessageToStore, modelMessage],
+                userId: currentUser.uid,
+                createdAt: serverTimestamp(),
+                ...(activeCocotalk && { cocotalkOriginId: activeCocotalk.id }),
+            };
+            const conversationRef = await addDoc(collection(db, "users", currentUser.uid, "conversations"), newConvData);
+            selectConversation(conversationRef.id);
+        }
+
     } catch (e: any) {
         console.error("Erreur inattendue dans handleSendMessage:", e);
         toast({
@@ -368,14 +321,14 @@ const handleSendMessage = async (text: string, file: File | null) => {
 };
 
   const createNewChat = async () => {
-    if (!auth.currentUser) return;
+    if (!currentUser) return;
     setActiveCocotalkId(null);
     setActiveConversationId(null);
   }
   
   const handleRenameConversation = async (id: string, title: string) => {
-    if (!auth.currentUser) return;
-    const convRef = doc(db, "users", auth.currentUser.uid, "conversations", id);
+    if (!currentUser) return;
+    const convRef = doc(db, "users", currentUser.uid, "conversations", id);
     try {
         await updateDoc(convRef, { title });
     } catch (error) {
@@ -385,7 +338,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
   };
 
   const handleDeleteConversation = async (id: string) => {
-    if (!auth.currentUser) return;
+    if (!currentUser) return;
     
     if (activeConversationId === id) {
         const currentIndex = conversations.findIndex(c => c.id === id);
@@ -401,7 +354,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
         }
     }
     
-    const convRef = doc(db, "users", auth.currentUser.uid, "conversations", id);
+    const convRef = doc(db, "users", currentUser.uid, "conversations", id);
     try {
         await deleteDoc(convRef);
     } catch (error) {
@@ -411,7 +364,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
   };
   
   const handleCreateCocotalk = async (values: CocotalkFormValues) => {
-    if (!auth.currentUser) {
+    if (!currentUser) {
         toast({
             variant: 'destructive',
             title: 'Erreur d\'authentification',
@@ -420,10 +373,10 @@ const handleSendMessage = async (text: string, file: File | null) => {
         return;
     }
     try {
-      const docRef = await addDoc(collection(db, "users", auth.currentUser.uid, "cocotalks"), {
+      const docRef = await addDoc(collection(db, "users", currentUser.uid, "cocotalks"), {
         ...values,
         createdAt: serverTimestamp(),
-        userId: auth.currentUser.uid,
+        userId: currentUser.uid,
       });
       toast({ title: 'Succès', description: 'Cocotalk créé avec succès.' });
       selectCocotalk(docRef.id);
@@ -434,8 +387,8 @@ const handleSendMessage = async (text: string, file: File | null) => {
   };
 
   const handleUpdateCocotalk = async (id: string, values: CocotalkFormValues) => {
-    if (!auth.currentUser) return;
-    const cocotalkRef = doc(db, "users", auth.currentUser.uid, "cocotalks", id);
+    if (!currentUser) return;
+    const cocotalkRef = doc(db, "users", currentUser.uid, "cocotalks", id);
     try {
       await updateDoc(cocotalkRef, values as any);
       toast({ title: 'Succès', description: 'Cocotalk mis à jour avec succès.' });
@@ -446,11 +399,11 @@ const handleSendMessage = async (text: string, file: File | null) => {
   };
 
   const handleDeleteCocotalk = async (id: string) => {
-    if (!auth.currentUser) return;
+    if (!currentUser) return;
     if (activeCocotalkId === id) {
       selectCocotalk(null);
     }
-    const cocotalkRef = doc(db, "users", auth.currentUser.uid, "cocotalks", id);
+    const cocotalkRef = doc(db, "users", currentUser.uid, "cocotalks", id);
     try {
       await deleteDoc(cocotalkRef);
       toast({ title: 'Succès', description: 'Cocotalk supprimé.' });
@@ -593,5 +546,3 @@ const handleSendMessage = async (text: string, file: File | null) => {
     </div>
   );
 }
-
-    
