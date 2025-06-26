@@ -429,13 +429,11 @@ const handleSendMessage = async (text: string, file: File | null) => {
   }
 
   const toDisplayMessages = (messages: StoredMessage[]): DisplayMessage[] => {
-    // 1. Defend against non-array input from Firestore
     if (!Array.isArray(messages)) {
         return [];
     }
 
     return messages
-        // 2. Aggressive filtering: ensure message is a valid object with required fields
         .filter((m): m is StoredMessage => {
             return m &&
                    typeof m === 'object' &&
@@ -443,7 +441,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
                    (m.role === 'user' || m.role === 'assistant' || m.role === 'system');
         })
         .map(msg => {
-            // 3. Explicitly handle the text content, defaulting to an empty string if null/undefined
+            // Defensive coding: Ensure textContent is a string before any operations.
             const textContent = (typeof msg.content === 'string') ? msg.content : '';
             let contentNode: React.ReactNode;
 
@@ -459,7 +457,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
                     </>
                 );
             } else {
-                // 4. The replace operation is now only ever called on a guaranteed string
+                // The replace operation is now only ever called on a guaranteed string.
                 const finalHtml = textContent.replace(/\n/g, '<br />');
                 contentNode = <p className="!my-0" dangerouslySetInnerHTML={{ __html: finalHtml }} />;
             }

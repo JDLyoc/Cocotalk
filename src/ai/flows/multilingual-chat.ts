@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -66,11 +67,15 @@ ${rules || 'Have a friendly and helpful conversation with the user.'}
 
     // Call the AI with the system prompt and the conversation history.
     // The history is passed directly as a series of messages.
-    const { text } = await ai.generate({
+    const genkitResponse = await ai.generate({
       model: 'googleai/gemini-2.0-flash',
       system: systemPrompt,
       history: messages as Message[],
     });
+
+    // Defensive coding: use optional chaining and nullish coalescing to prevent crashes
+    // if the response is empty or blocked by safety filters.
+    const text = genkitResponse?.text ?? '';
 
     return { response: text };
   }
