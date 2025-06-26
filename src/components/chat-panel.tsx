@@ -105,13 +105,13 @@ export function ChatPanel({ messages, onSendMessage, isLoading, isWelcomeMode = 
   }, []);
 
   React.useEffect(() => {
-    // When new messages arrive, scroll to bottom automatically.
-    // Use a small timeout to allow the DOM to update.
     const timer = setTimeout(() => {
-      scrollToBottom();
+        if(isAtBottom) {
+            scrollToBottom();
+        }
     }, 100);
     return () => clearTimeout(timer);
-  }, [messages, scrollToBottom]);
+  }, [messages, isAtBottom, scrollToBottom]);
 
   const handleSend = () => {
     if (isLoading) return;
@@ -152,9 +152,9 @@ export function ChatPanel({ messages, onSendMessage, isLoading, isWelcomeMode = 
   const showCocotalkWelcome = activeCocotalk && messages.length <= 1 && !messages.some(m => m.role === 'user');
 
   return (
-    <div className="flex h-full flex-col relative">
-      <div className="flex-1 relative">
-        <ScrollArea className="absolute inset-0 p-4" ref={scrollAreaRef}>
+    <div className="flex h-full flex-col">
+      <div className="relative flex-1 overflow-hidden">
+        <ScrollArea className="h-full p-4" ref={scrollAreaRef}>
           {showWelcome && <WelcomeScreen />}
           {showCocotalkWelcome && <CocotalkWelcomeScreen cocotalk={activeCocotalk} onStarterClick={handleStarterClick} />}
           
@@ -168,7 +168,7 @@ export function ChatPanel({ messages, onSendMessage, isLoading, isWelcomeMode = 
           </div>
         </ScrollArea>
         {!isAtBottom && (
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
                 <Button
                     size="icon"
                     className="rounded-full shadow-lg bg-accent text-accent-foreground hover:bg-accent/90"
@@ -200,7 +200,6 @@ export function ChatPanel({ messages, onSendMessage, isLoading, isWelcomeMode = 
                   type="button"
                   variant="ghost"
                   size="icon"
-                  onClick={() => toast({ description: "Choisissez une option" })}
                 >
                   <Paperclip className="h-5 w-5" />
                   <span className="sr-only">Joindre un fichier</span>
