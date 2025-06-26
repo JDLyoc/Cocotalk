@@ -249,7 +249,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
       const convRef = doc(db, "users", userId, "conversations", currentChatId!);
       
       const currentStoredConversation = conversations.find(c => c.id === currentChatId) || { messages: [] };
-      let messagesToStore: StoredMessage[] = [...currentStoredConversation.messages];
+      let messagesToStore: StoredMessage[] = [...(currentStoredConversation.messages || [])];
 
       // Handle greeting message for new cocotalk chats
       if(activeCocotalk && messagesToStore.length === 0 && activeCocotalk.greetingMessage) {
@@ -445,7 +445,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
   const activeDisplayConversation = activeConversation ? {
     id: activeConversation.id,
     title: activeConversation.title,
-    messages: toDisplayMessages(activeConversation.messages),
+    messages: toDisplayMessages(activeConversation.messages || []),
   } : null;
 
   const initialCocotalkMessages: DisplayMessage[] = [];
