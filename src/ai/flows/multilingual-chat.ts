@@ -1,4 +1,3 @@
-
 'use server';
 
 /**
@@ -36,45 +35,46 @@ export type MultilingualChatOutput = z.infer<typeof MultilingualChatOutputSchema
  * This function is critical for stability. It ensures:
  * 1. Only valid messages with content are kept.
  * 2. The history starts with a 'user' message.
- * 3. Roles alternate correctly (user, model, user, ...).
+ * 3. Roles alternate correctly (no two consecutive 'user' or 'model' roles).
  */
 function validateAndCleanHistory(messages: Message[]): Message[] {
   if (!messages || messages.length === 0) {
     return [];
   }
 
-  // 1. Filter for basic validity (role, content)
-  const validFormatMessages = messages.filter(msg =>
-    msg &&
-    typeof msg === 'object' &&
-    msg.role && ['user', 'model', 'tool'].includes(msg.role) &&
-    typeof msg.content === 'string' && msg.content.trim().length > 0
+  // 1. Filter out any messages that are fundamentally invalid (no role/content)
+  const validFormatMessages = messages.filter(
+    (msg) =>
+      msg &&
+      msg.role &&
+      ['user', 'model', 'tool'].includes(msg.role) &&
+      typeof msg.content === 'string' &&
+      msg.content.trim().length > 0
   );
 
   if (validFormatMessages.length === 0) {
     return [];
   }
-
-  const cleanedHistory: Message[] = [];
   
-  // 2. Find the first user message to start the conversation correctly
-  const firstUserIndex = validFormatMessages.findIndex(m => m.role === 'user');
+  // 2. Ensure we start with a user message if possible
+  const firstUserIndex = validFormatMessages.findIndex((msg) => msg.role === 'user');
   if (firstUserIndex === -1) {
-    return []; // A conversation must contain at least one user message.
+    return []; // No user message, invalid history
   }
+  const historyStartingWithUser = validFormatMessages.slice(firstUserIndex);
 
-  // 3. Add the first user message and enforce role alternation from there
-  cleanedHistory.push(validFormatMessages[firstUserIndex]);
-  let lastRole = 'user';
 
-  for (let i = firstUserIndex + 1; i < validFormatMessages.length; i++) {
-    const message = validFormatMessages[i];
-    // Skip consecutive messages of the same role (except for 'tool' which can follow a 'model' response)
-    if (message.role !== lastRole) {
+  // 3. Remove consecutive duplicate roles (e.g., user, user -> user)
+  const cleanedHistory: Message[] = [];
+  historyStartingWithUser.forEach((message) => {
+    if (cleanedHistory.length === 0 || cleanedHistory[cleanedHistory.length - 1].role !== message.role) {
       cleanedHistory.push(message);
-      lastRole = message.role;
+    } else {
+        // If the role is the same, overwrite the last message with the new one.
+        // This handles cases where UI state might have caused duplicates.
+        cleanedHistory[cleanedHistory.length - 1] = message;
     }
-  }
+  });
 
   return cleanedHistory;
 }
@@ -113,11 +113,12 @@ const multilingualChatFlow = ai.defineFlow(
       const activeModel = model || 'googleai/gemini-2.0-flash';
       
       // Step 1: Validate and clean the history. This is the crucial step.
-      let historyForGenkit = validateAndCleanHistory(messages);
+      let historyForGenkit = validateAndCleanHistory(messages || []);
 
       // CRITICAL FIX: If history is invalid or empty after cleaning, stop immediately.
       if (historyForGenkit.length === 0) {
-        throw new Error("INVALID_ARGUMENT: at least one message is required in generate request.");
+        console.error("No valid messages found after cleaning. Original message count:", messages?.length);
+        return { error: "Aucun message valide à envoyer. Veuillez vérifier votre saisie." };
       }
 
       // Step 2: Inject system instructions for Cocotalks (if applicable)

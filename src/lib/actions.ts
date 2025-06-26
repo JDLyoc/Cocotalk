@@ -1,4 +1,3 @@
-
 "use server";
 
 import { multilingualChat } from "@/ai/flows/multilingual-chat";
@@ -78,6 +77,16 @@ interface ProcessMessageInput {
 export async function processUserMessage(input: ProcessMessageInput): Promise<{ newConversationId?: string; error?: string }> {
     const { userId, conversationId, messageContent, file, model, currentMessages, cocotalkContext } = input;
 
+    console.log('Processing message:', {
+        userId,
+        conversationId,
+        messageContent: messageContent.substring(0, 50) + '...',
+        hasFile: !!file,
+        model,
+        currentMessagesCount: currentMessages?.length || 0,
+        hasCocotalkContext: !!cocotalkContext
+    });
+
     try {
         let finalContent = messageContent;
 
@@ -113,7 +122,17 @@ export async function processUserMessage(input: ProcessMessageInput): Promise<{ 
             ...(file && { file: { name: file.name, type: file.type } }),
         };
         
-        const historyForAI = [...currentMessages, userMessageForDb].map(m => ({ role: m.role, content: m.content })) as Message[];
+        // Ensure we have valid messages for AI
+        const validCurrentMessages = Array.isArray(currentMessages) ? currentMessages : [];
+        const historyForAI = [...validCurrentMessages, userMessageForDb].map(m => ({ 
+            role: m.role, 
+            content: m.content 
+        })) as Message[];
+
+        console.log('Prepared history for AI:', {
+            totalMessages: historyForAI.length,
+            messages: historyForAI.map(m => ({ role: m.role, contentLength: m.content?.length || 0 }))
+        });
 
         // Step 3: Call the AI
         const aiResult = await multilingualChat({
@@ -122,6 +141,8 @@ export async function processUserMessage(input: ProcessMessageInput): Promise<{ 
             rules: cocotalkContext?.instructions,
             model: model,
         });
+
+        console.log('AI result:', { hasResponse: !!aiResult.response, hasError: !!aiResult.error });
 
         if (aiResult.error) {
             return { error: aiResult.error };
@@ -138,6 +159,7 @@ export async function processUserMessage(input: ProcessMessageInput): Promise<{ 
 
         if (finalConversationId) {
             // Update existing conversation
+            console.log('Updating existing conversation:', finalConversationId);
             const conversationRef = doc(db, "users", userId, "conversations", finalConversationId);
             await updateDoc(conversationRef, {
                 messages: arrayUnion(userMessageForDb, modelMessageForDb)
@@ -152,8 +174,10 @@ export async function processUserMessage(input: ProcessMessageInput): Promise<{ 
                 createdAt: serverTimestamp(),
                 ...(cocotalkContext && { cocotalkOriginId: cocotalkContext.originId }),
             };
+            console.log('Creating new conversation with title:', newTitle);
             const conversationRef = await addDoc(collection(db, "users", userId, "conversations"), newConvData);
             finalConversationId = conversationRef.id;
+            console.log('New conversation created with ID:', finalConversationId);
         }
 
         return { newConversationId: finalConversationId };
@@ -163,3 +187,4 @@ export async function processUserMessage(input: ProcessMessageInput): Promise<{ 
         return { error: error.message || "Une erreur inconnue est survenue." };
     }
 }
+
