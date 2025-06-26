@@ -56,14 +56,14 @@ interface AgentContext {
 }
 
 export async function handleChat(
-  history: StoredMessage[], // History from client with 'assistant' role
+  history: StoredMessage[], 
   file: File | null,
   agentContext: AgentContext,
   model: string
 ) {
   try {
-    // Step 1: Translate roles for Genkit ('assistant' -> 'model')
-    const genkitHistory: GenkitMessage[] = history
+    // Step 1: Translate roles for Genkit ('assistant' -> 'model') and clean data
+    let genkitHistory: GenkitMessage[] = history
         .filter(msg => (msg.role === 'user' || msg.role === 'assistant') && typeof msg.content === 'string')
         .map(msg => ({
             role: msg.role === 'assistant' ? 'model' : 'user',
@@ -71,7 +71,6 @@ export async function handleChat(
         }));
 
     let contextText = "";
-    const lastUserMessage = genkitHistory.length > 0 ? genkitHistory[genkitHistory.length - 1] : null;
 
     // Step 2: Handle file context if present
     if (file) {
@@ -99,16 +98,26 @@ export async function handleChat(
       }
     }
 
-    // Step 3: Inject file context into the last user message
-    if (contextText && lastUserMessage && lastUserMessage.role === 'user') {
-      lastUserMessage.content = `${contextText}\n\nMessage de l'utilisateur: ${lastUserMessage.content}`;
+    // Step 3: Robustly combine context and user message
+    const lastMessage = genkitHistory.length > 0 ? genkitHistory[genkitHistory.length - 1] : null;
+
+    if (contextText) {
+        if (lastMessage && lastMessage.role === 'user') {
+            // Inject context into the last user message
+            lastMessage.content = `${contextText}\n\nMessage de l'utilisateur: ${lastMessage.content}`.trim();
+        } else {
+            // If there's no user message to inject into (e.g., file sent alone), create one
+            genkitHistory.push({ role: 'user', content: contextText });
+        }
     }
     
+    // Final check to prevent sending an empty request
     if (genkitHistory.length === 0) {
+        console.error("handleChat determined history is empty before calling AI flow.");
         return { response: '', error: "Impossible d'envoyer une conversation vide." };
     }
     
-    // Step 4: Call the AI flow with clean, translated data
+    // Step 4: Call the AI flow with clean, validated data
     const chatResult = await multilingualChat({ 
       messages: genkitHistory,
       persona: agentContext?.persona,

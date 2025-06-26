@@ -51,7 +51,7 @@ const multilingualChatFlow = ai.defineFlow(
     const { messages, persona, rules, model } = input;
     const activeModel = model || 'googleai/gemini-2.0-flash';
     
-    let historyForGenkit: Message[] = [...messages];
+    let historyForGenkit: Message[] = messages.filter(m => m.role !== 'system');
 
     // Only inject a system prompt if there are specific instructions (for Cocotalks).
     if (persona || rules) {
@@ -71,19 +71,21 @@ ${rules || 'Have a friendly and helpful conversation with the user.'}
 You have access to a web search tool. Use it by calling 'searchWeb' when you need recent information, facts, news, or up-to-date data to answer a user's request.
 `;
 
-      // Inject the system prompt into the first user message, or add one if history doesn't start with a user.
+      // Inject the system prompt into the first user message. This is the correct way for Gemini.
       if (historyForGenkit.length > 0 && historyForGenkit[0].role === 'user') {
         historyForGenkit[0] = {
           ...historyForGenkit[0],
           content: `${systemPromptText}\n\n---\n\nUser Request:\n${historyForGenkit[0].content}`,
         };
       } else {
+        // If history is empty or doesn't start with a user, create a user message with the instructions.
         historyForGenkit.unshift({ role: 'user', content: systemPromptText });
       }
     }
 
+    // FINAL SAFEGUARD: Ensure we never call the AI with an empty history.
     if (historyForGenkit.length === 0) {
-        console.error("Chat flow received an empty history. This should not happen.");
+        console.error("CRITICAL: multilingualChatFlow history is empty right before calling ai.generate(). This should have been caught earlier.");
         return { response: "Je suis désolé, une erreur interne m'empêche de répondre. Veuillez réessayer." };
     }
 
