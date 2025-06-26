@@ -25,7 +25,7 @@ import {
   setDoc,
 } from "firebase/firestore";
 import type { CocotalkFormValues } from "@/components/cocotalk-form";
-import type { Message } from "genkit";
+import type { Message as GenkitMessage } from "genkit";
 
 // Interface for messages passed to components (with ReactNode)
 export interface DisplayMessage {
@@ -219,13 +219,19 @@ const handleSendMessage = async (text: string, file: File | null) => {
     }
     setIsLoading(true);
 
-    let currentChatId = activeConversationId;
     const userId = auth.currentUser.uid;
+    let currentChatId = activeConversationId;
     let convRef;
+    let isNewConversation = false;
 
     try {
+        // Step 1: Ensure a conversation exists. Create one if needed.
         if (!currentChatId) {
-            const newTitle = activeCocotalk ? activeCocotalk.title : (text ? text.split(' ').slice(0, 3).join(' ') + (text.split(' ').length > 3 ? '...' : '') : file?.name || "New Conversation");
+            isNewConversation = true;
+            const newTitle = activeCocotalk 
+                ? activeCocotalk.title 
+                : (text.substring(0, 25).trim() + (text.length > 25 ? '...' : '') || file?.name || "Nouvelle Conversation");
+            
             const newConvData: Omit<StoredConversation, 'id' | 'createdAt'> = {
                 title: newTitle,
                 messages: [],
@@ -238,25 +244,26 @@ const handleSendMessage = async (text: string, file: File | null) => {
             });
             currentChatId = newConvRef.id;
             convRef = newConvRef;
-            selectConversation(newConvRef.id);
+            selectConversation(currentChatId); // Make the new conversation active
         } else {
             convRef = doc(db, "users", userId, "conversations", currentChatId);
         }
 
+        // Step 2: Get the most up-to-date history for the conversation.
         const currentStoredConversation = conversations.find(c => c.id === currentChatId);
+        let history = currentStoredConversation?.messages || [];
         
-        const baseMessages: StoredMessage[] = (currentStoredConversation?.messages || [])
-            .filter((m): m is StoredMessage => m && typeof m.role === 'string' && typeof m.content === 'string');
-
-        if (activeCocotalk && baseMessages.length === 0 && activeCocotalk.greetingMessage) {
+        // Add greeting message for new Cocotalk conversations
+        if (isNewConversation && activeCocotalk?.greetingMessage) {
             const greetingMessage: StoredMessage = {
                 id: Date.now().toString() + 'g',
                 role: 'assistant',
                 content: activeCocotalk.greetingMessage,
             };
-            baseMessages.push(greetingMessage);
+            history = [...history, greetingMessage];
         }
 
+        // Step 3: Create the new user message.
         const userMessage: StoredMessage = {
             id: Date.now().toString(),
             role: "user",
@@ -264,43 +271,36 @@ const handleSendMessage = async (text: string, file: File | null) => {
             ...(file && { file: { name: file.name, type: file.type } }),
         };
         
-        const messagesToStore = [...baseMessages, userMessage];
-        await updateDoc(convRef, { messages: messagesToStore });
+        const historyForBackend = [...history, userMessage];
         
-        const messagesForGenkit = messagesToStore
-            .map(msg => ({
-                role: msg.role === 'assistant' ? 'model' : 'user',
-                content: msg.content,
-            }))
-            .filter(msg => msg.role === 'user' || msg.role === 'model') as Message[];
-
-
-        let agentContext: { persona?: string; rules?: string; };
-        if (activeCocotalk) {
-            agentContext = { persona: activeCocotalk.persona, rules: activeCocotalk.instructions };
-        } else if (activeConversation?.cocotalkOriginId) {
-            const origin = cocotalks.find(c => c.id === activeConversation.cocotalkOriginId);
+        // Step 4: Determine agent context (persona, rules). This is where the separation happens.
+        let agentContext: { persona?: string; rules?: string; } = {};
+        const originCocotalkId = activeCocotalk ? activeCocotalk.id : currentStoredConversation?.cocotalkOriginId;
+        
+        if (originCocotalkId) {
+            const origin = cocotalks.find(c => c.id === originCocotalkId);
             agentContext = origin 
                 ? { persona: origin.persona, rules: origin.instructions }
-                : { persona: "A helpful assistant.", rules: "The custom instructions for this conversation could not be found because the original agent was deleted. Inform the user about this and then proceed with the conversation as a general-purpose assistant." };
-        } else {
-            // This is a standard chat. Send no specific persona or rules.
-            agentContext = {};
+                : { rules: "Les instructions pour cette conversation sont introuvables. Informez l'utilisateur et continuez comme un assistant standard." };
         }
+        // For a standard chat, agentContext remains empty: {}
 
-        const { response, error } = await handleChat(messagesForGenkit, file, agentContext, model);
+        // Step 5: Call the backend. It will handle role translation.
+        const { response, error } = await handleChat(historyForBackend, file, agentContext, model);
         
         if (error) {
             throw new Error(error);
         }
 
+        // Step 6: Create the assistant's response message.
         const assistantMessage: StoredMessage = {
             id: Date.now().toString() + 'a',
             role: 'assistant',
-            content: typeof response === 'string' ? response : '', 
+            content: response || '', // Ensure content is always a string
         };
         
-        await updateDoc(convRef, { messages: [...messagesToStore, assistantMessage] });
+        // Step 7: Update Firestore ONCE with the full history.
+        await updateDoc(convRef, { messages: [...history, userMessage, assistantMessage] });
 
     } catch (e: any) {
         const errorMsg = e.message || "An error occurred. Please try again.";
@@ -316,18 +316,8 @@ const handleSendMessage = async (text: string, file: File | null) => {
 
   const createNewChat = async () => {
     if (!auth.currentUser) return;
-    try {
-        const docRef = await addDoc(collection(db, "users", auth.currentUser.uid, "conversations"), {
-            title: `New Conversation`,
-            messages: [],
-            createdAt: serverTimestamp(),
-            userId: auth.currentUser.uid,
-        });
-        selectConversation(docRef.id);
-    } catch (error) {
-        console.error("Error creating new chat:", error);
-        toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de créer une nouvelle conversation.' });
-    }
+    setActiveCocotalkId(null);
+    setActiveConversationId(null);
   }
   
   const handleRenameConversation = async (id: string, title: string) => {
@@ -557,7 +547,3 @@ const handleSendMessage = async (text: string, file: File | null) => {
     </div>
   );
 }
-
-    
-
-    

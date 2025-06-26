@@ -4,7 +4,9 @@
 import { multilingualChat } from "@/ai/flows/multilingual-chat";
 import { decodeImage } from "@/ai/flows/image-decoder";
 import { summarizeDocument } from "@/ai/flows/summarize-document";
-import type { Message } from "genkit";
+import type { Message as GenkitMessage } from "genkit";
+import type { StoredMessage } from "@/app/page";
+
 
 const mammoth = require('mammoth');
 import * as xlsx from 'xlsx';
@@ -54,16 +56,24 @@ interface AgentContext {
 }
 
 export async function handleChat(
-  history: Message[],
+  history: StoredMessage[], // History from client with 'assistant' role
   file: File | null,
   agentContext: AgentContext,
   model: string
 ) {
   try {
-    let contextText = "";
-    const apiMessages = [...history];
-    const lastUserMessage = apiMessages.length > 0 ? apiMessages[apiMessages.length - 1] : null;
+    // Step 1: Translate roles for Genkit ('assistant' -> 'model')
+    const genkitHistory: GenkitMessage[] = history
+        .filter(msg => (msg.role === 'user' || msg.role === 'assistant') && typeof msg.content === 'string')
+        .map(msg => ({
+            role: msg.role === 'assistant' ? 'model' : 'user',
+            content: msg.content,
+        }));
 
+    let contextText = "";
+    const lastUserMessage = genkitHistory.length > 0 ? genkitHistory[genkitHistory.length - 1] : null;
+
+    // Step 2: Handle file context if present
     if (file) {
       if (file.type.startsWith("image/")) {
         try {
@@ -89,18 +99,18 @@ export async function handleChat(
       }
     }
 
-    // Robustly add context to the last user message.
+    // Step 3: Inject file context into the last user message
     if (contextText && lastUserMessage && lastUserMessage.role === 'user') {
       lastUserMessage.content = `${contextText}\n\nMessage de l'utilisateur: ${lastUserMessage.content}`;
     }
     
-    // Final check to ensure we never send an empty request.
-    if (apiMessages.length === 0) {
-        return { response: '', error: "Impossible d'envoyer une conversation vide. Veuillez ajouter un message ou un fichier." };
+    if (genkitHistory.length === 0) {
+        return { response: '', error: "Impossible d'envoyer une conversation vide." };
     }
-
+    
+    // Step 4: Call the AI flow with clean, translated data
     const chatResult = await multilingualChat({ 
-      messages: apiMessages,
+      messages: genkitHistory,
       persona: agentContext?.persona,
       rules: agentContext?.rules,
       model: model,
