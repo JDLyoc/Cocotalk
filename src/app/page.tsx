@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -33,7 +34,7 @@ export interface DisplayMessage {
   text_content?: string;
 }
 
-// Interface for messages stored in Firestore (UNIFIED ROLE)
+// Interface for messages stored in Firestore
 export interface StoredMessage {
   id: string;
   role: "user" | "model";
@@ -74,7 +75,7 @@ export interface StoredCocotalk {
   title: string;
   description: string;
   persona?: string;
-  instructions: string; // This is now the agent's full scenario/brain
+  instructions: string;
   starterMessage: string;
   greetingMessage?: string;
   createdAt: Timestamp;
@@ -215,123 +216,139 @@ React.useEffect(() => {
     return () => unsubscribe();
   }, [isAuthReady, toast]);
 
+const handleNormalMessage = async (text: string, file: File | null) => {
+  const userId = auth.currentUser!.uid;
+  let convId = activeConversationId;
+  let conversationRef;
+  let currentHistory: StoredMessage[] = [];
 
-  const prepareApiHistory = (messages: StoredMessage[]): ApiMessage[] => {
-    return messages
-      .map(msg => ({
-        role: msg.role as "user" | "model",
-        content: msg.content,
-        ...(msg.file && { file: msg.file })
-      }));
+  // Step 1: Get or create conversation
+  if (convId) {
+    conversationRef = doc(db, "users", userId, "conversations", convId);
+    const currentConv = conversations.find(c => c.id === convId);
+    currentHistory = currentConv?.messages ? [...currentConv.messages] : [];
+  } else {
+    const newTitle = text.substring(0, 30).trim() + (text.length > 30 ? '...' : '') || file?.name || "Nouvelle Conversation";
+    const newConvData = {
+      title: newTitle,
+      messages: [],
+      userId: userId,
+      createdAt: serverTimestamp(),
+    };
+    conversationRef = await addDoc(collection(db, "users", userId, "conversations"), newConvData);
+    convId = conversationRef.id;
+    selectConversation(convId);
+  }
+
+  // Step 2: Create a valid user message
+  const messageContent = text.trim() || (file ? `Analyse du fichier: ${file.name}` : "");
+  const userMessage: StoredMessage = {
+    id: Date.now().toString(),
+    role: "user",
+    content: messageContent,
+    ...(file && { file: { name: file.name, type: file.type } }),
   };
 
-  const handleNormalMessage = async (text: string, file: File | null) => {
-    const userId = auth.currentUser!.uid;
-    let convId = activeConversationId;
-    let conversationRef;
-    let currentHistory: StoredMessage[] = [];
-  
-    if (convId) {
-      conversationRef = doc(db, "users", userId, "conversations", convId);
-      const currentConv = conversations.find(c => c.id === convId);
-      currentHistory = currentConv?.messages ? [...currentConv.messages] : [];
-    } else {
-      const newTitle = text.substring(0, 30).trim() + (text.length > 30 ? '...' : '') || file?.name || "Nouvelle Conversation";
-      const newConvData = {
-        title: newTitle,
-        messages: [],
-        userId: userId,
-        createdAt: serverTimestamp(),
-      };
-      conversationRef = await addDoc(collection(db, "users", userId, "conversations"), newConvData);
-      convId = conversationRef.id;
-      selectConversation(convId);
-    }
-  
-    const userMessage: StoredMessage = {
-      id: Date.now().toString(),
-      role: "user",
-      content: text,
-      ...(file && { file: { name: file.name, type: file.type } }),
-    };
-  
-    const updatedHistory = [...currentHistory, userMessage];
-    await updateDoc(conversationRef, { messages: updatedHistory });
-  
-    const apiHistory = prepareApiHistory(updatedHistory);
-    
-    const { response, error } = await standardChat({ messages: apiHistory, file, model });
-  
-    if (error) {
-      toast({ variant: "destructive", title: "Erreur", description: error });
-      return;
-    }
-  
-    const modelMessage: StoredMessage = {
-      id: (Date.now() + 1).toString(),
-      role: 'model',
-      content: response || '',
-    };
-    await updateDoc(conversationRef, { messages: [...updatedHistory, modelMessage] });
+  const updatedHistory = [...currentHistory, userMessage];
+  await updateDoc(conversationRef, { messages: updatedHistory });
+
+  // Step 3: Call server action
+  const apiHistory = updatedHistory.map(({ role, content, file: fileInfo }) => ({
+    role: role as 'user' | 'model',
+    content,
+    ...(fileInfo && { file: fileInfo })
+  }));
+
+  const { response, error } = await standardChat({
+    messages: apiHistory,
+    file,
+    model,
+  });
+
+  if (error) {
+    toast({ variant: "destructive", title: "Erreur de l'IA", description: error });
+    // Remove the user message we just added to avoid a broken state
+    await updateDoc(conversationRef, { messages: currentHistory });
+    return;
+  }
+
+  // Step 4: Create model message and update Firestore again
+  const modelMessage: StoredMessage = {
+    id: (Date.now() + 1).toString(),
+    role: 'model',
+    content: response || 'Désolé, je n\'ai pas pu générer de réponse.',
   };
+  await updateDoc(conversationRef, { messages: [...updatedHistory, modelMessage] });
+};
   
-  const handleCocotalkMessage = async (text: string, file: File | null) => {
-    if (!activeCocotalk) return;
-  
-    const userId = auth.currentUser!.uid;
-    let convId = activeConversationId;
-    let conversationRef;
-    let currentHistory: StoredMessage[] = [];
-  
-    if (convId) {
-      conversationRef = doc(db, "users", userId, "conversations", convId);
-      const currentConv = conversations.find(c => c.id === convId);
-      currentHistory = currentConv?.messages ? [...currentConv.messages] : [];
-    } else {
-      const newConvData = {
-        title: activeCocotalk.title,
-        messages: [],
-        userId: userId,
-        createdAt: serverTimestamp(),
-        cocotalkOriginId: activeCocotalk.id,
-      };
-      conversationRef = await addDoc(collection(db, "users", userId, "conversations"), newConvData);
-      convId = conversationRef.id;
-      selectConversation(convId);
-    }
-  
-    const userMessage: StoredMessage = {
-      id: Date.now().toString(),
-      role: "user",
-      content: text,
-      ...(file && { file: { name: file.name, type: file.type } }),
+const handleCocotalkMessage = async (text: string, file: File | null) => {
+  if (!activeCocotalk) return;
+
+  const userId = auth.currentUser!.uid;
+  let convId = activeConversationId;
+  let conversationRef;
+  let currentHistory: StoredMessage[] = [];
+
+  // Step 1: Get or create conversation
+  if (convId) {
+    conversationRef = doc(db, "users", userId, "conversations", convId);
+    const currentConv = conversations.find(c => c.id === convId);
+    currentHistory = currentConv?.messages ? [...currentConv.messages] : [];
+  } else {
+    const newConvData = {
+      title: activeCocotalk.title,
+      messages: [],
+      userId: userId,
+      createdAt: serverTimestamp(),
+      cocotalkOriginId: activeCocotalk.id,
     };
-  
-    const updatedHistory = [...currentHistory, userMessage];
-    await updateDoc(conversationRef, { messages: updatedHistory });
-  
-    const apiHistory = prepareApiHistory(updatedHistory);
-  
-    const { response, error } = await cocotalkChat({
-      messages: apiHistory,
-      file,
-      persona: activeCocotalk.persona,
-      rules: activeCocotalk.instructions,
-      model,
-    });
-  
-    if (error) {
-        toast({ variant: "destructive", title: "Erreur", description: error });
-        return;
-    }
-  
-    const modelMessage: StoredMessage = {
-      id: (Date.now() + 1).toString(),
-      role: 'model',
-      content: response || '',
-    };
-    await updateDoc(conversationRef, { messages: [...updatedHistory, modelMessage] });
+    conversationRef = await addDoc(collection(db, "users", userId, "conversations"), newConvData);
+    convId = conversationRef.id;
+    selectConversation(convId);
+  }
+
+  // Step 2: Create a valid user message
+  const messageContent = text.trim() || (file ? `Analyse du fichier: ${file.name}` : "");
+  const userMessage: StoredMessage = {
+    id: Date.now().toString(),
+    role: "user",
+    content: messageContent,
+    ...(file && { file: { name: file.name, type: file.type } }),
   };
+
+  const updatedHistory = [...currentHistory, userMessage];
+  await updateDoc(conversationRef, { messages: updatedHistory });
+
+  // Step 3: Call server action
+  const apiHistory = updatedHistory.map(({ role, content, file: fileInfo }) => ({
+    role: role as 'user' | 'model',
+    content,
+    ...(fileInfo && { file: fileInfo })
+  }));
+
+  const { response, error } = await cocotalkChat({
+    messages: apiHistory,
+    file,
+    persona: activeCocotalk.persona,
+    rules: activeCocotalk.instructions,
+    model,
+  });
+
+  if (error) {
+    toast({ variant: "destructive", title: "Erreur de l'IA", description: error });
+    // Remove the user message we just added to avoid a broken state
+    await updateDoc(conversationRef, { messages: currentHistory });
+    return;
+  }
+
+  // Step 4: Create model message and update Firestore again
+  const modelMessage: StoredMessage = {
+    id: (Date.now() + 1).toString(),
+    role: 'model',
+    content: response || 'Désolé, je n\'ai pas pu générer de réponse.',
+  };
+  await updateDoc(conversationRef, { messages: [...updatedHistory, modelMessage] });
+};
 
 const handleSendMessage = async (text: string, file: File | null) => {
     if (!auth.currentUser) {
@@ -528,7 +545,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
 
   const initialCocotalkMessages: DisplayMessage[] = [];
   if (activeCocotalk && !activeConversationId) {
-    const greetingText = activeCocotalk.greetingMessage || "Hello! I'm your new assistant. How can I help you today?";
+    const greetingText = activeCocotalk.greetingMessage || "Bonjour! Je suis votre nouvel assistant. Comment puis-je vous aider aujourd'hui ?";
     initialCocotalkMessages.push({
       id: 'greeting-ui-only',
       role: 'model',
@@ -586,3 +603,5 @@ const handleSendMessage = async (text: string, file: File | null) => {
     </div>
   );
 }
+
+    
