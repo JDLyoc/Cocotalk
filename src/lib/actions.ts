@@ -48,68 +48,75 @@ async function extractTextFromFile(file: File): Promise<string> {
     }
 }
 
-interface CustomContext {
-    instructions: string;
+interface AgentContext {
     persona?: string;
+    rules?: string;
 }
 
 export async function handleChat(
   history: StoredMessage[],
   file: File | null,
-  customContext?: CustomContext
+  agentContext: AgentContext,
+  state: string,
 ) {
-  let contextText = "";
-  const conversationHistory = [...history]; // Create a mutable copy
+  try {
+    let contextText = "";
+    const conversationHistory = [...history]; // Create a mutable copy
 
-  if (file) {
-    if (file.type.startsWith("image/")) {
-      try {
-        const photoDataUri = await fileToDataUri(file);
-        const description = await decodeImage({ photoDataUri });
-        contextText = `Contexte de l'image jointe: ${description.description}.`;
-      } catch (error) {
-        console.error("Error decoding image:", error);
-        return { error: "Erreur lors de l'analyse de l'image." };
-      }
-    } else { 
-      try {
-        const documentContent = await extractTextFromFile(file);
-        if (!documentContent.trim()) {
-            return { error: `Le fichier ${file.name} est vide ou illisible.` };
+    if (file) {
+      if (file.type.startsWith("image/")) {
+        try {
+          const photoDataUri = await fileToDataUri(file);
+          const description = await decodeImage({ photoDataUri });
+          contextText = `Contexte de l'image jointe: ${description.description}.`;
+        } catch (error) {
+          console.error("Error decoding image:", error);
+          return { response: '', nextState: state, error: "Erreur lors de l'analyse de l'image." };
         }
-        const summary = await summarizeDocument({ documentContent, format: "text" });
-        contextText = `Contexte du document (${file.name}): ${summary.summary}.`;
-      } catch (error: any) {
-        console.error("Error processing document:", error);
-        return { error: `Erreur lors du traitement du fichier: ${error.message}` };
+      } else { 
+        try {
+          const documentContent = await extractTextFromFile(file);
+          if (!documentContent.trim()) {
+              return { response: '', nextState: state, error: `Le fichier ${file.name} est vide ou illisible.` };
+          }
+          const summary = await summarizeDocument({ documentContent, format: "text" });
+          contextText = `Contexte du document (${file.name}): ${summary.summary}.`;
+        } catch (error: any) {
+          console.error("Error processing document:", error);
+          return { response: '', nextState: state, error: `Erreur lors du traitement du fichier: ${error.message}` };
+        }
       }
     }
-  }
 
-  // Prepend file context to the last user message if it exists
-  if (contextText) {
-    const lastMessage = conversationHistory[conversationHistory.length - 1];
-    if (lastMessage && lastMessage.role === 'user') {
-        lastMessage.content = `${contextText}\n\nMessage de l'utilisateur: ${lastMessage.content}`;
+    // Prepend file context to the last user message if it exists
+    if (contextText) {
+      const lastMessage = conversationHistory[conversationHistory.length - 1];
+      if (lastMessage && lastMessage.role === 'user') {
+          lastMessage.content = `${contextText}\n\nMessage de l'utilisateur: ${lastMessage.content}`;
+      }
     }
+    
+    const apiMessages = conversationHistory
+      .filter(m => m.role === 'user' || m.role === 'assistant')
+      .map(m => ({
+          role: m.role === 'user' ? 'user' : 'model',
+          content: m.content || '',
+      }));
+
+    if (apiMessages.length === 0) {
+        return { response: '', nextState: state, error: "Impossible d'envoyer une conversation vide." };
+    }
+
+    const response = await multilingualChat({ 
+      messages: apiMessages,
+      persona: agentContext?.persona,
+      rules: agentContext?.rules,
+      state: state as any, // Cast because the enum is defined in the flow
+    });
+
+    return { ...response, error: null };
+  } catch (error: any) {
+      console.error("Error in handleChat:", error);
+      return { response: '', nextState: state, error: error.message || "Une erreur inconnue est survenue dans le chat." };
   }
-  
-  const apiMessages = conversationHistory
-    .filter(m => m.role === 'user' || m.role === 'assistant')
-    .map(m => ({
-        role: m.role === 'user' ? 'user' : 'model',
-        content: m.content || '',
-    }));
-
-  if (apiMessages.length === 0) {
-      return { error: "Impossible d'envoyer une conversation vide." };
-  }
-
-  const response = await multilingualChat({ 
-    messages: apiMessages,
-    persona: customContext?.persona,
-    customInstructions: customContext?.instructions
-  });
-
-  return { response: response.response };
 }

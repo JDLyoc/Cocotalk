@@ -152,15 +152,15 @@ export function CocotalkForm({ open, onOpenChange, onSubmit, cocotalkToEdit, isL
                 name="instructions"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Instructions</FormLabel>
+                    <FormLabel>Règles SEO & Rédactionnelles</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder="Tu es un expert en marketing... Agis de manière concise et professionnelle. Réponds toujours en 3 points clés..."
+                        placeholder="Ex: Rédige dans un style professionnel mais accessible. Évite la sur-optimisation. Cite toujours tes sources en utilisant le format (Source: Nom de la source)."
                         className="min-h-[200px]"
                         {...field}
                       />
                     </FormControl>
-                    <FormDescription>5000 caractères maximum.</FormDescription>
+                    <FormDescription>Règles de rédaction et de style que l'agent doit suivre à chaque étape. La logique du scénario est maintenant intégrée à l'agent.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -193,7 +193,7 @@ export function CocotalkForm({ open, onOpenChange, onSubmit, cocotalkToEdit, isL
                       <Textarea placeholder="Bonjour ! Je suis votre expert en marketing. Quelle est votre idée de campagne pour aujourd'hui ?" {...field} className="min-h-[80px]" />
                     </FormControl>
                     <FormDescription>
-                      Le premier message que l'assistant affichera. 500 caractères max.
+                      Le premier message que l'assistant affichera. S'il est vide, un message par défaut sera utilisé.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

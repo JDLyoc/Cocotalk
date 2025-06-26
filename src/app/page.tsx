@@ -58,6 +58,7 @@ export interface StoredConversation {
   createdAt: Timestamp;
   userId: string;
   cocotalkOriginId?: string;
+  state?: string;
 }
 
 // Interface for custom assistants (Cocotalks)
@@ -66,7 +67,7 @@ export interface StoredCocotalk {
   title: string;
   description: string;
   persona?: string;
-  instructions: string;
+  instructions: string; // Now used for style/SEO rules
   starterMessage: string;
   greetingMessage?: string;
   createdAt: Timestamp;
@@ -216,39 +217,33 @@ const handleSendMessage = async (text: string, file: File | null) => {
   let currentChatId = activeConversationId;
   const userId = auth.currentUser.uid;
   
-  let customContext;
-  if (activeCocotalk) {
-    customContext = { instructions: activeCocotalk.instructions, persona: activeCocotalk.persona };
-  } else if (activeConversation?.cocotalkOriginId) {
+  let agentContext;
+  let conversationState: string;
+
+  // Determine the context and state
+  if (activeCocotalk) { // Starting a new chat from a Cocotalk
+    agentContext = { persona: activeCocotalk.persona, rules: activeCocotalk.instructions };
+    conversationState = 'AWAITING_KEYWORD'; // All Cocotalks are stateful agents now
+  } else if (activeConversation?.cocotalkOriginId) { // Continuing a chat that was started from a Cocotalk
     const origin = cocotalks.find(c => c.id === activeConversation.cocotalkOriginId);
-    if(origin) {
-       customContext = { instructions: origin.instructions, persona: origin.persona };
-    }
+    agentContext = { persona: origin?.persona, rules: origin?.instructions };
+    conversationState = activeConversation.state || 'AWAITING_KEYWORD';
+  } else { // It's a generic chat, but we'll treat it as stateful for this scenario
+     agentContext = {};
+     conversationState = activeConversation?.state || 'AWAITING_KEYWORD';
   }
 
   try {
-      if (!currentChatId && !activeCocotalk) {
-           const newTitle = text
-              ? text.split(' ').slice(0, 3).join(' ') + (text.split(' ').length > 3 ? '...' : '')
-              : file?.name || "Nouvelle conversation";
+      if (!currentChatId) {
+          const newTitle = activeCocotalk ? activeCocotalk.title : (text ? text.split(' ').slice(0, 3).join(' ') + (text.split(' ').length > 3 ? '...' : '') : file?.name || "Nouvelle conversation");
           
           const newConvRef = await addDoc(collection(db, "users", userId, "conversations"), {
               title: newTitle,
               messages: [],
               createdAt: serverTimestamp(),
               userId: userId,
-          });
-          currentChatId = newConvRef.id;
-          setActiveConversationId(newConvRef.id);
-      }
-      
-      if (!currentChatId && activeCocotalk) {
-          const newConvRef = await addDoc(collection(db, "users", userId, "conversations"), {
-              title: activeCocotalk.title,
-              messages: [],
-              createdAt: serverTimestamp(),
-              userId: userId,
-              cocotalkOriginId: activeCocotalk.id
+              ...(activeCocotalk && { cocotalkOriginId: activeCocotalk.id }),
+              state: 'AWAITING_KEYWORD'
           });
           currentChatId = newConvRef.id;
           selectConversation(newConvRef.id);
@@ -256,12 +251,11 @@ const handleSendMessage = async (text: string, file: File | null) => {
 
       const convRef = doc(db, "users", userId, "conversations", currentChatId!);
       
-      const currentStoredConversation = conversations.find(c => c.id === currentChatId) || { messages: [] };
-      const historyFromDb = currentStoredConversation.messages;
-      
-      let messagesToStore: StoredMessage[] = [...historyFromDb];
+      const currentStoredConversation = conversations.find(c => c.id === currentChatId) || { messages: [], state: 'AWAITING_KEYWORD' };
+      let messagesToStore: StoredMessage[] = [...currentStoredConversation.messages];
 
-      if(activeCocotalk && historyFromDb.length === 0 && activeCocotalk.greetingMessage) {
+      // Handle greeting message for new cocotalk chats
+      if(activeCocotalk && messagesToStore.length === 0 && activeCocotalk.greetingMessage) {
         const greetingMessage: StoredMessage = {
           id: Date.now().toString() + 'g',
           role: 'assistant',
@@ -278,20 +272,23 @@ const handleSendMessage = async (text: string, file: File | null) => {
       };
       messagesToStore.push(userMessage);
 
-      await updateDoc(convRef, { messages: messagesToStore });
+      // We update the UI with the user message immediately, before calling the API
+      await updateDoc(convRef, { messages: messagesToStore, state: conversationState });
 
-      const response = await handleChat(messagesToStore, file, customContext);
-
-      if (response.error) {
-          throw new Error(response.error);
+      // Call the new stateful chat handler
+      const { response, nextState, error } = await handleChat(messagesToStore, file, agentContext, conversationState);
+      
+      if (error) {
+          throw new Error(error);
       }
 
       const assistantMessage: StoredMessage = {
           id: Date.now().toString() + 'a',
           role: 'assistant',
-          content: response.response,
+          content: response,
       };
-      await updateDoc(convRef, { messages: [...messagesToStore, assistantMessage] });
+      // Update with the assistant message AND the new state
+      await updateDoc(convRef, { messages: [...messagesToStore, assistantMessage], state: nextState });
 
   } catch (e: any) {
       const errorMsg = e.message || "Une erreur est survenue. Veuillez réessayer.";
@@ -314,6 +311,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
             messages: [],
             createdAt: serverTimestamp(),
             userId: auth.currentUser.uid,
+            state: 'AWAITING_KEYWORD', // All new chats start with the agent logic
         });
         selectConversation(docRef.id);
     } catch (error) {
@@ -431,7 +429,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
               </>
           );
       } else {
-          contentNode = <p className="!my-0">{msg.content}</p>;
+          contentNode = <p className="!my-0" dangerouslySetInnerHTML={{ __html: msg.content.replace(/\n/g, '<br />') }} />;
       }
       return {
         id: msg.id,
@@ -461,6 +459,13 @@ const handleSendMessage = async (text: string, file: File | null) => {
       role: 'assistant',
       content: <p className="!my-0">{activeCocotalk.greetingMessage}</p>,
       text_content: activeCocotalk.greetingMessage
+    });
+  } else if(activeCocotalk) {
+     initialCocotalkMessages.push({
+      id: 'greeting-default',
+      role: 'assistant',
+      content: <p className="!my-0">Bonjour ! Je suis votre assistant SEO. Pour commencer, quel est le mot-clé principal que vous souhaitez optimiser ?</p>,
+      text_content: "Bonjour ! Je suis votre assistant SEO. Pour commencer, quel est le mot-clé principal que vous souhaitez optimiser ?"
     });
   }
 
