@@ -56,7 +56,7 @@ export function ChatMessage({ role, content }: Omit<DisplayMessage, 'id' | 'text
         className={cn(
           "max-w-md rounded-lg p-3 text-sm",
           isUser
-            ? "bg-primary text-primary-foreground"
+            ? "bg-secondary text-secondary-foreground"
             : "bg-card border"
         )}
       >
