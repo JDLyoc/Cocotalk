@@ -86,10 +86,18 @@ export async function handleChat(
     }
   }
 
-  const fullMessage = contextText ? `${contextText} Message de l'utilisateur: ${text}` : text;
+  const fullMessage = contextText ? `${contextText}\n\nMessage de l'utilisateur: ${text}` : text;
   
+  const apiHistory = history
+    .filter(m => m.role === 'user' || m.role === 'assistant')
+    .map(m => ({
+        role: m.role === 'user' ? 'user' : 'model',
+        content: m.text_content || '',
+    }));
+
   const response = await multilingualChat({ 
     message: fullMessage,
+    history: apiHistory,
     persona: customContext?.persona,
     customInstructions: customContext?.instructions
   });

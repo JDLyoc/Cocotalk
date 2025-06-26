@@ -12,9 +12,16 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import { searchWebTool } from '../tools/web-search';
+import type { Message } from 'genkit';
+
+const MessageSchema = z.object({
+  role: z.enum(['user', 'model']),
+  content: z.string(),
+});
 
 const MultilingualChatInputSchema = z.object({
-  message: z.string().describe('The user message to be translated and responded to.'),
+  message: z.string().describe('The latest user message.'),
+  history: z.array(MessageSchema).optional().describe('The history of the conversation.'),
   persona: z.string().optional().describe('The persona the assistant should adopt.'),
   customInstructions: z.string().optional().describe('Custom instructions for the assistant.'),
 });
@@ -34,7 +41,7 @@ const multilingualChatPrompt = ai.definePrompt({
   input: {schema: MultilingualChatInputSchema},
   output: {schema: MultilingualChatOutputSchema},
   tools: [searchWebTool],
-  prompt: `{{#if customInstructions}}
+  system: `{{#if customInstructions}}
 {{{customInstructions}}}
 {{#if persona}}
 
@@ -44,10 +51,8 @@ Persona context:
 {{else}}
 You are a multilingual chatbot that can understand and respond in any language.
 The user will send you a message, and you must respond in the same language as the message.
-{{/if}}
-
-User Message: {{{message}}}
-Response:`,
+{{/if}}`,
+  prompt: `{{{message}}}`,
 });
 
 const multilingualChatFlow = ai.defineFlow(
@@ -56,8 +61,14 @@ const multilingualChatFlow = ai.defineFlow(
     inputSchema: MultilingualChatInputSchema,
     outputSchema: MultilingualChatOutputSchema,
   },
-  async input => {
-    const {output} = await multilingualChatPrompt(input);
+  async (input) => {
+    const history: Message[] =
+      input.history?.map((h) => ({
+        role: h.role,
+        content: [{text: h.content}],
+      })) || [];
+
+    const {output} = await multilingualChatPrompt(input, {history});
     return output!;
   }
 );
