@@ -14,12 +14,11 @@ import { searchWebTool } from '@/ai/tools/web-search';
 
 // Define the schema for a single message in the conversation
 const MessageSchema = z.object({
-  role: z.enum(['user', 'model', 'system', 'tool']), // Allow 'system' for filtering
+  role: z.enum(['user', 'model', 'tool']), // 'system' role is no longer used directly.
   content: z.string(),
 });
 
 // The input for the generic chat flow.
-// It takes the full conversation history and the rules/persona for the agent.
 const MultilingualChatInputSchema = z.object({
   messages: z.array(MessageSchema).describe('The entire conversation history, from oldest to newest.'),
   persona: z.string().optional().describe('The persona the assistant should adopt.'),
@@ -52,11 +51,8 @@ const multilingualChatFlow = ai.defineFlow(
     const { messages, persona, rules, model } = input;
     const activeModel = model || 'googleai/gemini-2.0-flash';
     
-    // **CRITICAL FIX**: Filter out any 'system' roles from the history
-    // The 'system' prompt is passed in a dedicated parameter, not in the history.
-    const filteredHistory = messages.filter(m => m.role !== 'system');
-
-    const systemPrompt = `You are a powerful and flexible conversational AI assistant.
+    // Construct the system prompt text.
+    const systemPromptText = `You are a powerful and flexible conversational AI assistant.
 Your behavior is defined by the following persona and rules. You MUST follow them.
 
 ## Persona
@@ -72,11 +68,24 @@ ${rules || 'Have a friendly and helpful conversation with the user.'}
 You have access to a web search tool. Use it by calling 'searchWeb' when you need recent information, facts, news, or up-to-date data to answer a user's request.
 `;
 
+    // **DEFINITIVE FIX**: Instead of using the 'system' parameter, we inject the system prompt
+    // into the first user message, as recommended for Gemini API compatibility.
+    const historyWithInjectedSystemPrompt = [...messages];
+    if (historyWithInjectedSystemPrompt.length > 0 && historyWithInjectedSystemPrompt[0].role === 'user') {
+      historyWithInjectedSystemPrompt[0] = {
+        ...historyWithInjectedSystemPrompt[0],
+        content: `${systemPromptText}\n\n---\n\nUser Request:\n${historyWithInjectedSystemPrompt[0].content}`,
+      };
+    } else {
+      // If history is empty or doesn't start with a user message, prepend the system prompt as the first user message.
+      historyWithInjectedSystemPrompt.unshift({ role: 'user', content: systemPromptText });
+    }
+
     // Start the generation process
     let genkitResponse = await ai.generate({
       model: activeModel,
-      system: systemPrompt,
-      history: filteredHistory as Message[], // Use the filtered history
+      // NO MORE 'system' parameter. The context is now baked into the history.
+      history: historyWithInjectedSystemPrompt as Message[],
       tools: [searchWebTool],
       toolChoice: 'auto', 
     });
@@ -102,9 +111,8 @@ You have access to a web search tool. Use it by calling 'searchWeb' when you nee
             // Send the tool results back to the model to get a final response
             genkitResponse = await ai.generate({
                 model: activeModel,
-                system: systemPrompt,
-                // The history now includes the model's request and the tool's output
-                history: [...(filteredHistory as Message[]), genkitResponse.message, ...toolOutputs], // Use filtered history
+                // The full history, including the injected prompt, is used for context.
+                history: [...(historyWithInjectedSystemPrompt as Message[]), genkitResponse.message, ...toolOutputs],
                 tools: [searchWebTool],
                 toolChoice: 'auto',
             });
