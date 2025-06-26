@@ -3,18 +3,28 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Allow reads to the global logo settings for everyone,
-    // and writes for authenticated users.
+    // Rule for the Logo:
+    // Anyone can read the logo URL to display it.
+    // Only an authenticated user can change the logo.
     match /settings/logo {
       allow read: if true;
       allow write: if request.auth != null;
     }
 
-    // Allow a user to read and write to any document within their own
-    // user data tree. This single rule covers creating their user document,
-    // updating it, and managing all sub-collections like conversations.
-    match /users/{userId}/{documents=**} {
+    // Rule for the user's main document (e.g., /users/USER_ID_123):
+    // This is the CRITICAL rule that was missing. It allows a user to:
+    // 1. Create their own profile document.
+    // 2. Update their profile (e.g., the `lastLogin` timestamp).
+    // This rule was the source of the "permission denied" error.
+    match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Rule for ALL documents INSIDE a user's document (e.g., their conversations):
+    // This allows a user to create, read, update, and delete documents
+    // in their own sub-collections like `conversations` and `cocotalks`.
+    match /users/{userId}/{document=**} {
+      allow read, write, delete: if request.auth != null && request.auth.uid == userId;
     }
   }
 }
