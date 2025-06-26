@@ -430,7 +430,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
 
   const toDisplayMessages = (messages: StoredMessage[]): DisplayMessage[] => {
     const validMessages = (messages || []).filter(
-        (m): m is StoredMessage => m && typeof m.id === 'string' && typeof m.role === 'string' && typeof m.content !== 'undefined'
+        (m): m is StoredMessage => m && typeof m.id === 'string' && typeof m.role === 'string' && typeof m.content === 'string'
     );
     
     return validMessages.map(msg => {
@@ -538,5 +538,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
     </div>
   );
 }
+
+    
 
     
