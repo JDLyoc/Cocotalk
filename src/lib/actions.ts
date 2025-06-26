@@ -60,7 +60,17 @@ export async function handleChat(
 ) {
   try {
     let contextText = "";
-    const conversationHistory = (history || []).filter(Boolean);
+
+    // This is a robust filter to ensure that any corrupted data from Firestore
+    // does not crash the application. It validates that each message is a proper
+    // object with the required string properties.
+    const validHistory = (history || []).filter(
+        (m): m is StoredMessage =>
+            m &&
+            typeof m === 'object' &&
+            typeof m.role === 'string' &&
+            typeof m.content === 'string'
+    );
 
     if (file) {
       if (file.type.startsWith("image/")) {
@@ -89,17 +99,17 @@ export async function handleChat(
 
     // Prepend file context to the last user message if it exists
     if (contextText) {
-      const lastMessage = conversationHistory[conversationHistory.length - 1];
+      const lastMessage = validHistory[validHistory.length - 1];
       if (lastMessage && lastMessage.role === 'user') {
-          lastMessage.content = `${contextText}\n\nMessage de l'utilisateur: ${lastMessage.content || ''}`;
+          lastMessage.content = `${contextText}\n\nMessage de l'utilisateur: ${lastMessage.content}`;
       }
     }
     
-    const apiMessages = conversationHistory
+    const apiMessages = validHistory
       .filter(m => m.role === 'user' || m.role === 'assistant')
       .map(m => ({
           role: m.role === 'user' ? 'user' : 'model',
-          content: m.content || '',
+          content: m.content,
       }));
 
     if (apiMessages.length === 0) {
