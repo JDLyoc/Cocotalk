@@ -218,13 +218,12 @@ const handleSendMessage = async (text: string, file: File | null) => {
   
   let agentContext: { persona?: string; rules?: string; };
 
-  // Determine the context for the agent.
-  if (activeCocotalk) { // A new chat started from a Cocotalk.
+  if (activeCocotalk) {
     agentContext = { persona: activeCocotalk.persona, rules: activeCocotalk.instructions };
-  } else if (activeConversation?.cocotalkOriginId) { // Continuing a chat that originated from a Cocotalk.
+  } else if (activeConversation?.cocotalkOriginId) {
     const origin = cocotalks.find(c => c.id === activeConversation.cocotalkOriginId);
     agentContext = { persona: origin?.persona, rules: origin?.instructions };
-  } else { // It's a generic chat without a specific Cocotalk.
+  } else {
      agentContext = { 
        persona: "A friendly and helpful assistant.",
        rules: "Your job is to have a simple, helpful conversation. Respond clearly and concisely to the user's questions."
@@ -249,9 +248,13 @@ const handleSendMessage = async (text: string, file: File | null) => {
       const convRef = doc(db, "users", userId, "conversations", currentChatId!);
       
       const currentStoredConversation = conversations.find(c => c.id === currentChatId);
-      let messagesToStore: StoredMessage[] = [...(currentStoredConversation?.messages || [])];
+      
+      // Robustly filter messages before using them
+      const validStoredMessages = (currentStoredConversation?.messages || []).filter(
+          (m): m is StoredMessage => m && typeof m.role === 'string' && typeof m.content === 'string'
+      );
+      let messagesToStore: StoredMessage[] = [...validStoredMessages];
 
-      // Handle greeting message for new cocotalk chats
       if(activeCocotalk && messagesToStore.length === 0 && activeCocotalk.greetingMessage) {
         const greetingMessage: StoredMessage = {
           id: Date.now().toString() + 'g',
@@ -269,10 +272,8 @@ const handleSendMessage = async (text: string, file: File | null) => {
       };
       messagesToStore.push(userMessage);
 
-      // We update the UI with the user message immediately
       await updateDoc(convRef, { messages: messagesToStore });
 
-      // Call the new generic chat handler
       const { response, error } = await handleChat(messagesToStore, file, agentContext);
       
       if (error) {
@@ -284,7 +285,6 @@ const handleSendMessage = async (text: string, file: File | null) => {
           role: 'assistant',
           content: response,
       };
-      // Update with the assistant message
       await updateDoc(convRef, { messages: [...messagesToStore, assistantMessage] });
 
   } catch (e: any) {
@@ -411,12 +411,19 @@ const handleSendMessage = async (text: string, file: File | null) => {
   }
 
   const toDisplayMessages = (messages: StoredMessage[]): DisplayMessage[] => {
-    return (messages || []).filter(Boolean).map(msg => {
+    // Robustly filter messages to prevent crashes from corrupted data
+    const validMessages = (messages || []).filter(
+        (m): m is StoredMessage => m && typeof m.id === 'string' && typeof m.role === 'string' && typeof m.content !== 'undefined'
+    );
+    
+    return validMessages.map(msg => {
       let contentNode: React.ReactNode;
+      const textContent = msg.content || ''; // Safely access content
+
       if (msg.role === 'user') {
           contentNode = (
               <>
-                  {msg.content && <p className="!my-0">{msg.content}</p>}
+                  {textContent && <p className="!my-0">{textContent}</p>}
                   {msg.file && (
                       <div className="mt-2 p-2 border rounded-lg bg-muted text-muted-foreground text-sm">
                           Fichier joint: {msg.file.name}
@@ -425,13 +432,13 @@ const handleSendMessage = async (text: string, file: File | null) => {
               </>
           );
       } else {
-          contentNode = <p className="!my-0" dangerouslySetInnerHTML={{ __html: (msg.content || '').replace(/\n/g, '<br />') }} />;
+          contentNode = <p className="!my-0" dangerouslySetInnerHTML={{ __html: textContent.replace(/\n/g, '<br />') }} />;
       }
       return {
         id: msg.id,
         role: msg.role,
         content: contentNode,
-        text_content: msg.content || '',
+        text_content: textContent,
       };
     });
   };
@@ -445,7 +452,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
   const activeDisplayConversation = activeConversation ? {
     id: activeConversation.id,
     title: activeConversation.title,
-    messages: toDisplayMessages(activeConversation.messages || []),
+    messages: toDisplayMessages(activeConversation.messages),
   } : null;
 
   const initialCocotalkMessages: DisplayMessage[] = [];

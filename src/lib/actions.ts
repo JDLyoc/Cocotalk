@@ -101,7 +101,7 @@ export async function handleChat(
     if (contextText) {
       const lastMessage = validHistory[validHistory.length - 1];
       if (lastMessage && lastMessage.role === 'user') {
-          lastMessage.content = `${contextText}\n\nMessage de l'utilisateur: ${lastMessage.content}`;
+          lastMessage.content = `${contextText}\n\nMessage de l'utilisateur: ${lastMessage.content || ''}`;
       }
     }
     
@@ -109,7 +109,7 @@ export async function handleChat(
       .filter(m => m.role === 'user' || m.role === 'assistant')
       .map(m => ({
           role: m.role === 'user' ? 'user' : 'model',
-          content: m.content,
+          content: m.content || '',
       }));
 
     if (apiMessages.length === 0) {
