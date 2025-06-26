@@ -12,7 +12,6 @@ import { z } from 'genkit';
 import type { Message } from 'genkit';
 import { searchWebTool } from '@/ai/tools/web-search';
 
-// Use Genkit's expected roles
 const MessageSchema = z.object({
   role: z.enum(['user', 'model', 'tool']),
   content: z.string(),
@@ -32,44 +31,52 @@ const MultilingualChatOutputSchema = z.object({
 });
 export type MultilingualChatOutput = z.infer<typeof MultilingualChatOutputSchema>;
 
-
 /**
  * Validates and cleans the message history to ensure it's in a valid format for the Genkit API.
- * 1. Filters out invalid or empty messages.
- * 2. Ensures roles alternate (e.g., user, model, user...).
- * 3. Guarantees the history starts with a 'user' message.
+ * This function is critical for stability. It ensures:
+ * 1. Only valid messages with content are kept.
+ * 2. The history starts with a 'user' message.
+ * 3. Roles alternate correctly (user, model, user, ...).
  */
 function validateAndCleanHistory(messages: Message[]): Message[] {
-  // 1. Filter out invalid messages
-  const validMessages = messages.filter(msg =>
+  if (!messages || messages.length === 0) {
+    return [];
+  }
+
+  // 1. Filter for basic validity (role, content)
+  const validFormatMessages = messages.filter(msg =>
     msg &&
     typeof msg === 'object' &&
     msg.role && ['user', 'model', 'tool'].includes(msg.role) &&
     typeof msg.content === 'string' && msg.content.trim().length > 0
   );
 
-  if (validMessages.length === 0) {
+  if (validFormatMessages.length === 0) {
     return [];
   }
 
-  // 2. Ensure alternating roles and no duplicates
   const cleanedHistory: Message[] = [];
-  let lastRole: string | null = null;
-  for (const message of validMessages) {
-    if (message.role === lastRole && message.role !== 'tool') {
-      continue; // Skip consecutive messages with the same role
-    }
-    cleanedHistory.push(message);
-    lastRole = message.role;
-  }
-
-  // 3. Ensure we start with a user message
-  const firstUserIndex = cleanedHistory.findIndex(msg => msg.role === 'user');
+  
+  // 2. Find the first user message to start the conversation correctly
+  const firstUserIndex = validFormatMessages.findIndex(m => m.role === 'user');
   if (firstUserIndex === -1) {
-    return []; // No user message found
+    return []; // A conversation must contain at least one user message.
   }
 
-  return cleanedHistory.slice(firstUserIndex);
+  // 3. Add the first user message and enforce role alternation from there
+  cleanedHistory.push(validFormatMessages[firstUserIndex]);
+  let lastRole = 'user';
+
+  for (let i = firstUserIndex + 1; i < validFormatMessages.length; i++) {
+    const message = validFormatMessages[i];
+    // Skip consecutive messages of the same role (except for 'tool' which can follow a 'model' response)
+    if (message.role !== lastRole) {
+      cleanedHistory.push(message);
+      lastRole = message.role;
+    }
+  }
+
+  return cleanedHistory;
 }
 
 
@@ -105,12 +112,12 @@ const multilingualChatFlow = ai.defineFlow(
       const { messages, persona, rules, model } = input;
       const activeModel = model || 'googleai/gemini-2.0-flash';
       
-      // Step 1: Validate and clean the history
+      // Step 1: Validate and clean the history. This is the crucial step.
       let historyForGenkit = validateAndCleanHistory(messages);
 
-      // CRITICAL FIX: If history is invalid or empty after cleaning, throw an error.
+      // CRITICAL FIX: If history is invalid or empty after cleaning, stop immediately.
       if (historyForGenkit.length === 0) {
-        throw new Error("Invalid conversation history provided. No valid messages to process.");
+        throw new Error("INVALID_ARGUMENT: at least one message is required in generate request.");
       }
 
       // Step 2: Inject system instructions for Cocotalks (if applicable)
