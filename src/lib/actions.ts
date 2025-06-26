@@ -27,39 +27,9 @@ export async function processUserMessage(input: ProcessMessageInput): Promise<{ 
     const { userId, conversationId, messageContent, model, activeCocotalk } = input;
 
     try {
-        let historyForAI: Message[] = [];
+        // TEST: Bypassing the AI call as suggested by the user.
+        const aiResponse = "Ceci est une réponse de test pour vérifier la sauvegarde.";
 
-        // Step 1: Fetch existing conversation from DB if conversationId is provided.
-        if (conversationId) {
-            const conversationRef = doc(db, "users", userId, "conversations", conversationId);
-            const conversationSnap = await getDoc(conversationRef);
-
-            if (conversationSnap.exists()) {
-                const conversationData = conversationSnap.data();
-                const existingMessages: StoredMessage[] = conversationData.messages || [];
-                historyForAI = existingMessages.map((m) => ({
-                    role: m.role,
-                    content: m.content,
-                }));
-            }
-        }
-        
-        // Add the new user message to the history for the AI.
-        historyForAI.push({ role: 'user', content: messageContent });
-
-        // Step 2: Call the AI.
-        const aiResult = await multilingualChat({
-            messages: historyForAI,
-            persona: activeCocotalk?.persona,
-            rules: activeCocotalk?.instructions,
-            model: model,
-        });
-
-        if (aiResult.error || !aiResult.response) {
-            return { error: aiResult.error || "L'IA n'a pas pu générer de réponse." };
-        }
-
-        // Prepare messages for DB
         const userMessageForDb: StoredMessage = {
             id: `user_${Date.now()}`,
             role: 'user',
@@ -68,19 +38,18 @@ export async function processUserMessage(input: ProcessMessageInput): Promise<{ 
         const modelMessageForDb: StoredMessage = {
             id: `model_${Date.now() + 1}`,
             role: 'model',
-            content: aiResult.response,
+            content: aiResponse,
         };
 
-        // Step 3: Save to Firestore
         if (conversationId) {
-            // Update existing conversation
+            // This part is for existing conversations, our test focuses on new ones.
             const conversationRef = doc(db, "users", userId, "conversations", conversationId);
             await updateDoc(conversationRef, {
                 messages: arrayUnion(userMessageForDb, modelMessageForDb)
             });
             return { newConversationId: conversationId };
         } else {
-            // Create new conversation
+            // This is the critical part for our test: creating a new conversation.
             const newTitle = activeCocotalk?.title || messageContent.substring(0, 30).trim() || "Nouvelle Conversation";
             
             const newConvData = {
@@ -95,10 +64,10 @@ export async function processUserMessage(input: ProcessMessageInput): Promise<{ 
         }
 
     } catch (error: any) {
-        console.error("Critical error in processUserMessage:", error);
+        console.error("Critical error in processUserMessage (test mode):", error);
         if (error.code === 'permission-denied') {
             return { error: "Erreur de permission. Vérifiez les règles de sécurité de Firestore." };
         }
-        return { error: error.message || "Une erreur inconnue est survenue." };
+        return { error: `Une erreur de sauvegarde est survenue: ${error.message}` };
     }
 }
