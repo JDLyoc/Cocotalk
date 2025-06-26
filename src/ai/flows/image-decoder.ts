@@ -17,6 +17,7 @@ const DecodeImageInputSchema = z.object({
     .describe(
       "A photo, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
     ),
+  model: z.string().optional().describe('The specific AI model to use for the generation.'),
 });
 export type DecodeImageInput = z.infer<typeof DecodeImageInputSchema>;
 
@@ -29,25 +30,23 @@ export async function decodeImage(input: DecodeImageInput): Promise<DecodeImageO
   return decodeImageFlow(input);
 }
 
-const prompt = ai.definePrompt({
-  name: 'decodeImagePrompt',
-  input: {schema: DecodeImageInputSchema},
-  output: {schema: DecodeImageOutputSchema},
-  prompt: `You are an expert in image recognition and description.
-
-You will receive an image and you will need to describe it in detail so that a chatbot can understand the context of the image.
-
-Image: {{media url=photoDataUri}}`,
-});
-
 const decodeImageFlow = ai.defineFlow(
   {
     name: 'decodeImageFlow',
     inputSchema: DecodeImageInputSchema,
     outputSchema: DecodeImageOutputSchema,
   },
-  async input => {
-    const {output} = await prompt(input);
+  async (input) => {
+    const activeModel = input.model || 'googleai/gemini-2.0-flash';
+    
+    const { output } = await ai.generate({
+      model: activeModel,
+      prompt: [
+        { text: `You are an expert in image recognition and description. You will receive an image and you will need to describe it in detail so that a chatbot can understand the context of the image.\n\nImage:` },
+        { media: { url: input.photoDataUri } }
+      ],
+      output: { schema: DecodeImageOutputSchema },
+    });
     return output!;
   }
 );

@@ -10,6 +10,7 @@ import { AppHeader } from "@/components/app-header";
 import { auth, db } from "@/lib/firebase";
 import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useModel } from "@/contexts/model-context";
 import {
   collection,
   query,
@@ -113,6 +114,7 @@ function AppSkeleton() {
 
 export default function Home() {
   const { toast } = useToast();
+  const { model } = useModel();
   
   const [conversations, setConversations] = React.useState<StoredConversation[]>([]);
   const [activeConversationId, setActiveConversationId] = React.useState<string | null>(null);
@@ -243,8 +245,6 @@ const handleSendMessage = async (text: string, file: File | null) => {
 
         const currentStoredConversation = conversations.find(c => c.id === currentChatId);
         
-        // **CRUCIAL FIX**: Filter history for valid messages *before* doing anything else.
-        // This prevents crashes from `null` content in old messages.
         const baseMessages: StoredMessage[] = (currentStoredConversation?.messages || [])
             .filter((m): m is StoredMessage => m && typeof m.role === 'string' && typeof m.content === 'string');
 
@@ -264,10 +264,8 @@ const handleSendMessage = async (text: string, file: File | null) => {
             ...(file && { file: { name: file.name, type: file.type } }),
         };
 
-        // First DB update with user message for immediate UI feedback
         await updateDoc(convRef, { messages: [...baseMessages, userMessage] });
         
-        // **CRUCIAL FIX**: Translate roles for Genkit AI
         const messagesForGenkit = [...baseMessages, userMessage]
             .map(msg => ({
                 role: msg.role === 'assistant' ? 'model' : 'user',
@@ -288,7 +286,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
             agentContext = { persona: "A friendly and helpful assistant.", rules: "Your job is to have a simple, helpful conversation. Respond clearly and concisely to the user's questions." };
         }
 
-        const { response, error } = await handleChat(messagesForGenkit, file, agentContext);
+        const { response, error } = await handleChat(messagesForGenkit, file, agentContext, model);
         
         if (error) {
             throw new Error(error);
@@ -300,7 +298,6 @@ const handleSendMessage = async (text: string, file: File | null) => {
             content: typeof response === 'string' ? response : '', 
         };
         
-        // Second DB update with the assistant's response
         await updateDoc(convRef, { messages: [...baseMessages, userMessage, assistantMessage] });
 
     } catch (e: any) {

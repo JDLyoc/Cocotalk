@@ -6,7 +6,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { Bot, ImageIcon, MessageSquare, Users } from "lucide-react";
 import { LogoUploaderFirebase } from "./logo-uploader-firebase";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-
+import { useModel, AVAILABLE_MODELS, type AvailableModel } from "@/contexts/model-context";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const activityData = [
   { date: 'Lundi', conversations: 4 },
@@ -18,7 +19,15 @@ const activityData = [
   { date: 'Dimanche', conversations: 4 },
 ];
 
+const modelDisplayNames: Record<AvailableModel, string> = {
+    'googleai/gemini-2.0-flash': 'Gemini 2.0 Flash',
+    'googleai/gemini-1.5-flash': 'Gemini 1.5 Flash',
+    'googleai/gemini-1.5-pro': 'Gemini 1.5 Pro',
+};
+
 export function Dashboard() {
+  const { model, setModel } = useModel();
+
   return (
       <div className="space-y-6">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -44,12 +53,23 @@ export function Dashboard() {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Modèle IA</CardTitle>
+              <CardTitle className="text-sm font-medium">Modèle IA Actif</CardTitle>
               <Bot className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">Gemini 2.0</div>
-              <p className="text-xs text-muted-foreground">Flash</p>
+                <Select value={model} onValueChange={(value) => setModel(value as AvailableModel)}>
+                    <SelectTrigger className="text-2xl font-bold p-0 h-auto border-none focus:ring-0 shadow-none">
+                        <SelectValue placeholder="Choisir un modèle" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {AVAILABLE_MODELS.map((m) => (
+                            <SelectItem key={m} value={m}>
+                                {modelDisplayNames[m]}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">S'applique à toute l'app.</p>
             </CardContent>
           </Card>
           <Dialog>

@@ -20,6 +20,7 @@ const SummarizeDocumentInputSchema = z.object({
     .enum(['text', 'markdown'])
     .default('text')
     .describe('The format of the summary.'),
+  model: z.string().optional().describe('The specific AI model to use for the generation.'),
 });
 export type SummarizeDocumentInput = z.infer<typeof SummarizeDocumentInputSchema>;
 
@@ -32,21 +33,21 @@ export async function summarizeDocument(input: SummarizeDocumentInput): Promise<
   return summarizeDocumentFlow(input);
 }
 
-const prompt = ai.definePrompt({
-  name: 'summarizeDocumentPrompt',
-  input: {schema: SummarizeDocumentInputSchema},
-  output: {schema: SummarizeDocumentOutputSchema},
-  prompt: `You are an expert at summarizing documents. Please provide a concise summary of the following document.  The summary should be in {{{format}}} format.\n\nDocument Content:\n{{{documentContent}}}`,
-});
-
 const summarizeDocumentFlow = ai.defineFlow(
   {
     name: 'summarizeDocumentFlow',
     inputSchema: SummarizeDocumentInputSchema,
     outputSchema: SummarizeDocumentOutputSchema,
   },
-  async input => {
-    const {output} = await prompt(input);
+  async (input) => {
+    const activeModel = input.model || 'googleai/gemini-2.0-flash';
+    const prompt = `You are an expert at summarizing documents. Please provide a concise summary of the following document. The summary should be in ${input.format} format.\n\nDocument Content:\n${input.documentContent}`;
+    
+    const { output } = await ai.generate({
+        model: activeModel,
+        prompt: prompt,
+        output: { schema: SummarizeDocumentOutputSchema },
+    });
     return output!;
   }
 );

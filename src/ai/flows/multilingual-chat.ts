@@ -24,6 +24,7 @@ const MultilingualChatInputSchema = z.object({
   messages: z.array(MessageSchema).describe('The entire conversation history, from oldest to newest.'),
   persona: z.string().optional().describe('The persona the assistant should adopt.'),
   rules: z.string().optional().describe('The user-defined scenario, rules, and instructions the agent must follow.'),
+  model: z.string().optional().describe('The specific AI model to use for the generation.'),
 });
 export type MultilingualChatInput = z.infer<typeof MultilingualChatInputSchema>;
 
@@ -48,7 +49,8 @@ const multilingualChatFlow = ai.defineFlow(
     outputSchema: MultilingualChatOutputSchema,
   },
   async (input) => {
-    const { messages, persona, rules } = input;
+    const { messages, persona, rules, model } = input;
+    const activeModel = model || 'googleai/gemini-2.0-flash';
     
     const systemPrompt = `You are a powerful and flexible conversational AI assistant.
 Your behavior is defined by the following persona and rules. You MUST follow them.
@@ -68,7 +70,7 @@ You have access to a web search tool. Use it by calling 'searchWeb' when you nee
 
     // Start the generation process
     let genkitResponse = await ai.generate({
-      model: 'googleai/gemini-2.0-flash', // Using the app's default model
+      model: activeModel,
       system: systemPrompt,
       history: messages as Message[],
       tools: [searchWebTool],
@@ -95,7 +97,7 @@ You have access to a web search tool. Use it by calling 'searchWeb' when you nee
             
             // Send the tool results back to the model to get a final response
             genkitResponse = await ai.generate({
-                model: 'googleai/gemini-2.0-flash', // Using the app's default model
+                model: activeModel,
                 system: systemPrompt,
                 // The history now includes the model's request and the tool's output
                 history: [...(messages as Message[]), genkitResponse.message, ...toolOutputs], 

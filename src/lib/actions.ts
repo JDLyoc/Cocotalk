@@ -57,18 +57,18 @@ export async function handleChat(
   history: Message[],
   file: File | null,
   agentContext: AgentContext,
+  model: string
 ) {
   try {
     let contextText = "";
     
-    // The history is already translated and filtered from the client.
-    const apiMessages = [...history]; // Make a mutable copy.
+    const apiMessages = [...history];
 
     if (file) {
       if (file.type.startsWith("image/")) {
         try {
           const photoDataUri = await fileToDataUri(file);
-          const description = await decodeImage({ photoDataUri });
+          const description = await decodeImage({ photoDataUri, model });
           contextText = `Contexte de l'image jointe: ${description.description}.`;
         } catch (error) {
           console.error("Error decoding image:", error);
@@ -80,7 +80,7 @@ export async function handleChat(
           if (!documentContent.trim()) {
               return { response: '', error: `Le fichier ${file.name} est vide ou illisible.` };
           }
-          const summary = await summarizeDocument({ documentContent, format: "text" });
+          const summary = await summarizeDocument({ documentContent, format: "text", model });
           contextText = `Contexte du document (${file.name}): ${summary.summary}.`;
         } catch (error: any) {
           console.error("Error processing document:", error);
@@ -89,7 +89,6 @@ export async function handleChat(
       }
     }
 
-    // Prepend file context to the last user message if it exists
     if (contextText) {
       const lastMessage = apiMessages[apiMessages.length - 1];
       if (lastMessage && lastMessage.role === 'user') {
@@ -109,6 +108,7 @@ export async function handleChat(
       messages: apiMessages,
       persona: agentContext?.persona,
       rules: agentContext?.rules,
+      model: model,
     });
     
     const responseText = chatResult?.response ?? '';

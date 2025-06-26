@@ -2,6 +2,7 @@ import type {Metadata} from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster"
 import { cn } from '@/lib/utils';
+import { ModelProvider } from '@/contexts/model-context';
 
 export const metadata: Metadata = {
   title: 'Assistant IA',
@@ -22,8 +23,10 @@ export default function RootLayout({
         <link rel="icon" href="/icon.svg" type="image/svg+xml" />
       </head>
       <body className={cn("font-body antialiased", "font-body")}>
-        {children}
-        <Toaster />
+        <ModelProvider>
+          {children}
+          <Toaster />
+        </ModelProvider>
       </body>
     </html>
   );
