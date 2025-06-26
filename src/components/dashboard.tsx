@@ -20,9 +20,9 @@ const activityData = [
 ];
 
 const modelDisplayNames: Record<AvailableModel, string> = {
-    'googleai/gemini-2.0-flash': 'Gemini 2.0 Flash',
-    'googleai/gemini-1.5-flash': 'Gemini 1.5 Flash',
-    'googleai/gemini-1.5-pro': 'Gemini 1.5 Pro',
+    'googleai/gemini-2.0-flash': 'Gemini 2.0 Flash (Rapide)',
+    'googleai/gemini-1.5-flash-latest': 'Gemini 1.5 Flash (Dernier)',
+    'googleai/gemini-1.5-pro-latest': 'Gemini 1.5 Pro (Le plus puissant)',
 };
 
 export function Dashboard() {

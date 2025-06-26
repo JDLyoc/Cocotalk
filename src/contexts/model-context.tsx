@@ -3,11 +3,11 @@
 import * as React from 'react';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 
-// List of available models
+// List of available models, curated for multimodal capabilities to ensure app stability
 export const AVAILABLE_MODELS = [
   'googleai/gemini-2.0-flash',
-  'googleai/gemini-1.5-flash',
-  'googleai/gemini-1.5-pro',
+  'googleai/gemini-1.5-flash-latest',
+  'googleai/gemini-1.5-pro-latest',
 ] as const;
 
 export type AvailableModel = typeof AVAILABLE_MODELS[number];
