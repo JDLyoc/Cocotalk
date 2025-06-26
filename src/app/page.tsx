@@ -222,7 +222,15 @@ const handleSendMessage = async (text: string, file: File | null) => {
     agentContext = { persona: activeCocotalk.persona, rules: activeCocotalk.instructions };
   } else if (activeConversation?.cocotalkOriginId) {
     const origin = cocotalks.find(c => c.id === activeConversation.cocotalkOriginId);
-    agentContext = { persona: origin?.persona, rules: origin?.instructions };
+    if (origin) {
+        agentContext = { persona: origin.persona, rules: origin.instructions };
+    } else {
+        // This is the fix: Handle the case where the origin Cocotalk was deleted.
+        agentContext = { 
+            persona: "A helpful assistant.",
+            rules: "You are a helpful assistant. The custom instructions for this conversation could not be found because the original agent was deleted. Inform the user about this and then proceed with the conversation as a general-purpose assistant."
+        };
+    }
   } else {
      agentContext = { 
        persona: "A friendly and helpful assistant.",
@@ -249,7 +257,6 @@ const handleSendMessage = async (text: string, file: File | null) => {
       
       const currentStoredConversation = conversations.find(c => c.id === currentChatId);
       
-      // Robustly filter messages before using them
       const validStoredMessages = (currentStoredConversation?.messages || []).filter(
           (m): m is StoredMessage => m && typeof m.role === 'string' && typeof m.content === 'string'
       );
@@ -411,14 +418,13 @@ const handleSendMessage = async (text: string, file: File | null) => {
   }
 
   const toDisplayMessages = (messages: StoredMessage[]): DisplayMessage[] => {
-    // Robustly filter messages to prevent crashes from corrupted data
     const validMessages = (messages || []).filter(
         (m): m is StoredMessage => m && typeof m.id === 'string' && typeof m.role === 'string' && typeof m.content !== 'undefined'
     );
     
     return validMessages.map(msg => {
       let contentNode: React.ReactNode;
-      const textContent = msg.content || ''; // Safely access content
+      const textContent = msg.content || '';
 
       if (msg.role === 'user') {
           contentNode = (
@@ -452,7 +458,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
   const activeDisplayConversation = activeConversation ? {
     id: activeConversation.id,
     title: activeConversation.title,
-    messages: toDisplayMessages(activeConversation.messages),
+    messages: toDisplayMessages(activeConversation.messages || []),
   } : null;
 
   const initialCocotalkMessages: DisplayMessage[] = [];
