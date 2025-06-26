@@ -6,7 +6,6 @@ import { decodeImage } from "@/ai/flows/image-decoder";
 import { summarizeDocument } from "@/ai/flows/summarize-document";
 import type { DisplayMessage } from "@/app/page";
 
-// Using require for CJS modules that may not have full ESM support or types
 const mammoth = require('mammoth');
 import * as xlsx from 'xlsx';
 
@@ -26,29 +25,7 @@ async function extractTextFromFile(file: File): Promise<string> {
             
         case 'application/pdf': {
             const pdf = require('pdf-parse');
-            // A custom pagerender function is used as a workaround for a bug in pdf-parse
-            // that can cause file system errors in serverless environments.
-            const customPageRender = (pageData: any) => {
-                return pageData.getTextContent({ normalizeWhitespace: false, disableCombineTextItems: false })
-                .then((textContent: any) => {
-                    let lastY: number | undefined;
-                    let text = '';
-                    for (let item of textContent.items) {
-                        if (lastY !== undefined && lastY !== item.transform[5]) {
-                            text += '\n';
-                        }
-                        text += item.str;
-                        lastY = item.transform[5];
-                    }
-                    return text;
-                });
-            };
-
-            const options = {
-                pagerender: customPageRender
-            };
-
-            const data = await pdf(buffer, options);
+            const data = await pdf(buffer);
             return data.text;
         }
 
@@ -71,11 +48,16 @@ async function extractTextFromFile(file: File): Promise<string> {
     }
 }
 
+interface CustomContext {
+    instructions: string;
+    persona?: string;
+}
 
 export async function handleChat(
   history: DisplayMessage[],
   text: string,
-  file: File | null
+  file: File | null,
+  customContext?: CustomContext
 ) {
   let contextText = "";
 
@@ -89,7 +71,7 @@ export async function handleChat(
         console.error("Error decoding image:", error);
         return { error: "Erreur lors de l'analyse de l'image." };
       }
-    } else { // Handle all supported document types
+    } else { 
       try {
         const documentContent = await extractTextFromFile(file);
         if (!documentContent.trim()) {
@@ -106,7 +88,11 @@ export async function handleChat(
 
   const fullMessage = contextText ? `${contextText} Message de l'utilisateur: ${text}` : text;
   
-  const response = await multilingualChat({ message: fullMessage });
+  const response = await multilingualChat({ 
+    message: fullMessage,
+    persona: customContext?.persona,
+    customInstructions: customContext?.instructions
+  });
 
   return { response: response.response };
 }

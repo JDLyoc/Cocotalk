@@ -22,6 +22,7 @@ import {
   deleteDoc,
   Timestamp,
 } from "firebase/firestore";
+import type { CocotalkFormValues } from "@/components/cocotalk-form";
 
 // Interface for messages passed to components (with ReactNode)
 export interface DisplayMessage {
@@ -58,6 +59,19 @@ export interface StoredConversation {
   userId: string;
 }
 
+// Interface for custom assistants (Cocotalks)
+export interface StoredCocotalk {
+  id: string;
+  title: string;
+  description: string;
+  persona?: string;
+  instructions: string;
+  starterMessage: string;
+  createdAt: Timestamp;
+  userId: string;
+}
+
+
 function AppSkeleton() {
     return (
         <div className="flex flex-col h-screen w-full bg-background overflow-hidden">
@@ -72,6 +86,7 @@ function AppSkeleton() {
             </header>
             <div className="flex flex-1 overflow-hidden">
                 <aside className="flex h-full w-full max-w-[280px] flex-col bg-sidebar text-sidebar-foreground p-4">
+                    <Skeleton className="h-11 w-full mb-4" />
                     <Skeleton className="h-11 w-full mb-4" />
                     <Skeleton className="h-6 w-3/4 mb-4" />
                     <div className="space-y-1">
@@ -97,11 +112,15 @@ export default function Home() {
   
   const [conversations, setConversations] = React.useState<StoredConversation[]>([]);
   const [activeConversationId, setActiveConversationId] = React.useState<string | null>(null);
+  const [cocotalks, setCocotalks] = React.useState<StoredCocotalk[]>([]);
+  const [activeCocotalkId, setActiveCocotalkId] = React.useState<string | null>(null);
+
   const [isLoading, setIsLoading] = React.useState(false);
   const [isAuthReady, setIsAuthReady] = React.useState(false);
   const [isDataLoading, setIsDataLoading] = React.useState(true);
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
+  const activeCocotalk = cocotalks.find(c => c.id === activeCocotalkId);
   
   React.useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, user => {
@@ -140,7 +159,7 @@ export default function Home() {
         setConversations(conversationsData);
         
         if (isDataLoading) {
-            if (conversationsData.length > 0 && !activeConversationId) {
+            if (conversationsData.length > 0 && !activeConversationId && !activeCocotalkId) {
                 setActiveConversationId(conversationsData[0].id);
             }
             setIsDataLoading(false);
@@ -156,7 +175,33 @@ export default function Home() {
     });
 
     return () => unsubscribe();
-}, [isAuthReady, isDataLoading, activeConversationId, toast]);
+}, [isAuthReady, isDataLoading, activeConversationId, activeCocotalkId, toast]);
+
+React.useEffect(() => {
+    if (!isAuthReady || !auth.currentUser) return;
+    
+    const q = query(
+      collection(db, "users", auth.currentUser.uid, "cocotalks"),
+      orderBy("createdAt", "desc")
+    );
+
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const cocotalksData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      } as StoredCocotalk));
+      setCocotalks(cocotalksData);
+    }, (error) => {
+      console.error("Error fetching cocotalks:", error);
+      toast({
+        variant: "destructive",
+        title: "Erreur de chargement",
+        description: "Impossible de charger les Cocotalks personnalisés.",
+      });
+    });
+
+    return () => unsubscribe();
+  }, [isAuthReady, toast]);
 
 
 const handleSendMessage = async (text: string, file: File | null) => {
@@ -168,11 +213,11 @@ const handleSendMessage = async (text: string, file: File | null) => {
 
   let currentChatId = activeConversationId;
   const userId = auth.currentUser.uid;
+  const isCocotalkSession = !!activeCocotalk;
 
   try {
-      // Create new chat if none is active
-      if (!currentChatId) {
-          const newTitle = text
+      if (!currentChatId && !isCocotalkSession) {
+           const newTitle = text
               ? text.split(' ').slice(0, 3).join(' ') + (text.split(' ').length > 3 ? '...' : '')
               : file?.name || "Nouvelle conversation";
           
@@ -185,6 +230,19 @@ const handleSendMessage = async (text: string, file: File | null) => {
           currentChatId = newConvRef.id;
           setActiveConversationId(newConvRef.id);
       }
+      
+      if (!currentChatId && isCocotalkSession) {
+          const newConvRef = await addDoc(collection(db, "users", userId, "conversations"), {
+              title: activeCocotalk.title,
+              messages: [],
+              createdAt: serverTimestamp(),
+              userId: userId,
+              cocotalkOriginId: activeCocotalk.id
+          });
+          currentChatId = newConvRef.id;
+          selectConversation(newConvRef.id);
+      }
+
 
       const convRef = doc(db, "users", userId, "conversations", currentChatId!);
       const currentMessages = conversations.find(c => c.id === currentChatId)?.messages || [];
@@ -201,7 +259,9 @@ const handleSendMessage = async (text: string, file: File | null) => {
 
       // Call AI for response
       const apiHistory = messagesWithUser.map(m => ({...m, content: <p>{m.content}</p>, text_content: m.content})) as any;
-      const response = await handleChat(apiHistory, text, file);
+      const response = await handleChat(apiHistory, text, file, 
+        isCocotalkSession ? { instructions: activeCocotalk.instructions, persona: activeCocotalk.persona } : undefined
+      );
 
       if (response.error) {
           throw new Error(response.error);
@@ -237,7 +297,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
             createdAt: serverTimestamp(),
             userId: auth.currentUser.uid,
         });
-        setActiveConversationId(docRef.id);
+        selectConversation(docRef.id);
     } catch (error) {
         console.error("Error creating new chat:", error);
         toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de créer une nouvelle conversation.' });
@@ -263,12 +323,12 @@ const handleSendMessage = async (text: string, file: File | null) => {
         if (conversations.length > 1) {
             const newActiveIndex = currentIndex > 0 ? currentIndex - 1 : 1;
             if (conversations[newActiveIndex]) {
-              setActiveConversationId(conversations[newActiveIndex].id);
+              selectConversation(conversations[newActiveIndex].id);
             } else {
-              setActiveConversationId(null);
+              selectConversation(null);
             }
         } else {
-            setActiveConversationId(null);
+            selectConversation(null);
         }
     }
     
@@ -280,12 +340,64 @@ const handleSendMessage = async (text: string, file: File | null) => {
         toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de supprimer la conversation.' });
     }
   };
+  
+  const handleCreateCocotalk = async (values: CocotalkFormValues) => {
+    if (!auth.currentUser) return;
+    try {
+      const docRef = await addDoc(collection(db, "users", auth.currentUser.uid, "cocotalks"), {
+        ...values,
+        createdAt: serverTimestamp(),
+        userId: auth.currentUser.uid,
+      });
+      toast({ title: 'Succès', description: 'Cocotalk créé avec succès.' });
+      selectCocotalk(docRef.id);
+    } catch (error) {
+      console.error("Error creating new cocotalk:", error);
+      toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de créer le Cocotalk.' });
+    }
+  };
+
+  const handleUpdateCocotalk = async (id: string, values: CocotalkFormValues) => {
+    if (!auth.currentUser) return;
+    const cocotalkRef = doc(db, "users", auth.currentUser.uid, "cocotalks", id);
+    try {
+      await updateDoc(cocotalkRef, values as any);
+      toast({ title: 'Succès', description: 'Cocotalk mis à jour avec succès.' });
+    } catch (error) {
+      console.error("Error updating cocotalk:", error);
+      toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de mettre à jour le Cocotalk.' });
+    }
+  };
+
+  const handleDeleteCocotalk = async (id: string) => {
+    if (!auth.currentUser) return;
+    if (activeCocotalkId === id) {
+      selectCocotalk(null);
+    }
+    const cocotalkRef = doc(db, "users", auth.currentUser.uid, "cocotalks", id);
+    try {
+      await deleteDoc(cocotalkRef);
+      toast({ title: 'Succès', description: 'Cocotalk supprimé.' });
+    } catch (error) {
+      console.error("Error deleting cocotalk:", error);
+      toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de supprimer le Cocotalk.' });
+    }
+  };
+
+  const selectConversation = (id: string | null) => {
+      setActiveCocotalkId(null);
+      setActiveConversationId(id);
+  }
+
+  const selectCocotalk = (id: string | null) => {
+      setActiveConversationId(null);
+      setActiveCocotalkId(id);
+  }
 
   if (!isAuthReady || isDataLoading) {
     return <AppSkeleton />;
   }
 
-  // --- Mapping functions to convert stored data to display data ---
   const toDisplayMessages = (messages: StoredMessage[]): DisplayMessage[] => {
     return messages.map(msg => {
       let contentNode: React.ReactNode;
@@ -315,7 +427,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
   const displayConversations: DisplayConversation[] = conversations.map(conv => ({
     id: conv.id,
     title: conv.title,
-    messages: [], // We only need messages for the active conversation
+    messages: [], 
   }));
 
   const activeDisplayConversation = activeConversation ? {
@@ -331,10 +443,16 @@ const handleSendMessage = async (text: string, file: File | null) => {
         <AppSidebar
           conversations={displayConversations}
           activeConversationId={activeConversationId}
-          setActiveConversationId={setActiveConversationId}
+          setActiveConversationId={selectConversation}
           createNewChat={createNewChat}
           onDeleteConversation={handleDeleteConversation}
           onRenameConversation={handleRenameConversation}
+          cocotalks={cocotalks}
+          activeCocotalkId={activeCocotalkId}
+          setActiveCocotalkId={selectCocotalk}
+          createNewCocotalk={handleCreateCocotalk}
+          updateCocotalk={handleUpdateCocotalk}
+          deleteCocotalk={handleDeleteCocotalk}
         />
         <main className="flex flex-1 flex-col">
           {activeDisplayConversation ? (
@@ -344,6 +462,14 @@ const handleSendMessage = async (text: string, file: File | null) => {
               onSendMessage={handleSendMessage}
               isLoading={isLoading}
             />
+          ) : activeCocotalk ? (
+            <ChatPanel
+             key={activeCocotalk.id}
+             messages={[]}
+             onSendMessage={handleSendMessage}
+             isLoading={isLoading}
+             activeCocotalk={activeCocotalk}
+           />
           ) : (
             <ChatPanel
               key="welcome"
@@ -358,5 +484,3 @@ const handleSendMessage = async (text: string, file: File | null) => {
     </div>
   );
 }
-
-    

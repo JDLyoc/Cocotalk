@@ -13,6 +13,8 @@ import {z} from 'genkit';
 
 const MultilingualChatInputSchema = z.object({
   message: z.string().describe('The user message to be translated and responded to.'),
+  persona: z.string().optional().describe('The persona the assistant should adopt.'),
+  customInstructions: z.string().optional().describe('Custom instructions for the assistant.'),
 });
 export type MultilingualChatInput = z.infer<typeof MultilingualChatInputSchema>;
 
@@ -29,11 +31,20 @@ const multilingualChatPrompt = ai.definePrompt({
   name: 'multilingualChatPrompt',
   input: {schema: MultilingualChatInputSchema},
   output: {schema: MultilingualChatOutputSchema},
-  prompt: `You are a multilingual chatbot that can understand and respond in any language.
-  The user will send you a message, and you must respond in the same language as the message.
+  prompt: `{{#if customInstructions}}
+{{{customInstructions}}}
+{{#if persona}}
 
-  User Message: {{{message}}}
-  Response:`,
+Persona context:
+{{{persona}}}
+{{/if}}
+{{else}}
+You are a multilingual chatbot that can understand and respond in any language.
+The user will send you a message, and you must respond in the same language as the message.
+{{/if}}
+
+User Message: {{{message}}}
+Response:`,
 });
 
 const multilingualChatFlow = ai.defineFlow(
