@@ -14,7 +14,7 @@ import { searchWebTool } from '@/ai/tools/web-search';
 
 // Define the schema for a single message in the conversation
 const MessageSchema = z.object({
-  role: z.enum(['user', 'model', 'tool']), // 'system' role is no longer used directly.
+  role: z.enum(['user', 'model', 'tool']),
   content: z.string(),
 });
 
@@ -51,8 +51,11 @@ const multilingualChatFlow = ai.defineFlow(
     const { messages, persona, rules, model } = input;
     const activeModel = model || 'googleai/gemini-2.0-flash';
     
-    // Construct the system prompt text.
-    const systemPromptText = `You are a powerful and flexible conversational AI assistant.
+    let historyForGenkit: Message[] = [...messages];
+
+    // Only inject a system prompt if there are specific instructions (for Cocotalks).
+    if (persona || rules) {
+      const systemPromptText = `You are a powerful and flexible conversational AI assistant.
 Your behavior is defined by the following persona and rules. You MUST follow them.
 
 ## Persona
@@ -68,63 +71,57 @@ ${rules || 'Have a friendly and helpful conversation with the user.'}
 You have access to a web search tool. Use it by calling 'searchWeb' when you need recent information, facts, news, or up-to-date data to answer a user's request.
 `;
 
-    // **DEFINITIVE FIX**: Instead of using the 'system' parameter, we inject the system prompt
-    // into the first user message, as recommended for Gemini API compatibility.
-    const historyWithInjectedSystemPrompt = [...messages];
-    if (historyWithInjectedSystemPrompt.length > 0 && historyWithInjectedSystemPrompt[0].role === 'user') {
-      historyWithInjectedSystemPrompt[0] = {
-        ...historyWithInjectedSystemPrompt[0],
-        content: `${systemPromptText}\n\n---\n\nUser Request:\n${historyWithInjectedSystemPrompt[0].content}`,
-      };
-    } else {
-      // If history is empty or doesn't start with a user message, prepend the system prompt as the first user message.
-      historyWithInjectedSystemPrompt.unshift({ role: 'user', content: systemPromptText });
+      // Inject the system prompt into the first user message, or add one if history doesn't start with a user.
+      if (historyForGenkit.length > 0 && historyForGenkit[0].role === 'user') {
+        historyForGenkit[0] = {
+          ...historyForGenkit[0],
+          content: `${systemPromptText}\n\n---\n\nUser Request:\n${historyForGenkit[0].content}`,
+        };
+      } else {
+        historyForGenkit.unshift({ role: 'user', content: systemPromptText });
+      }
+    }
+
+    if (historyForGenkit.length === 0) {
+        console.error("Chat flow received an empty history. This should not happen.");
+        return { response: "Je suis désolé, une erreur interne m'empêche de répondre. Veuillez réessayer." };
     }
 
     // Start the generation process
     let genkitResponse = await ai.generate({
       model: activeModel,
-      // NO MORE 'system' parameter. The context is now baked into the history.
-      history: historyWithInjectedSystemPrompt as Message[],
+      history: historyForGenkit,
       tools: [searchWebTool],
       toolChoice: 'auto', 
     });
 
     // Loop to handle tool calls until a final text response is generated
     while (true) {
-        // If the response is text, we're done. Break the loop.
         if (genkitResponse.text) {
             break;
         }
 
-        // If the response contains tool calls, execute them.
         const toolCalls = genkitResponse.toolCalls();
         if (toolCalls.length > 0) {
             const toolOutputs: any[] = [];
-            // Execute each tool requested by the model
             for (const call of toolCalls) {
                 console.log('Tool call requested:', call);
                 const output = await ai.runTool(call);
                 toolOutputs.push(output);
             }
             
-            // Send the tool results back to the model to get a final response
             genkitResponse = await ai.generate({
                 model: activeModel,
-                // The full history, including the injected prompt, is used for context.
-                history: [...(historyWithInjectedSystemPrompt as Message[]), genkitResponse.message, ...toolOutputs],
+                history: [...historyForGenkit, genkitResponse.message, ...toolOutputs],
                 tools: [searchWebTool],
                 toolChoice: 'auto',
             });
         } else {
-            // If there's no text and no tool calls, it's an unusual state.
-            // Break the loop to prevent it from running forever.
             console.warn("Generation response has no text and no tool calls. Breaking loop.");
             break;
         }
     }
 
-    // The final defensive check, applied after the tool-calling loop is complete.
     const text = genkitResponse?.text ?? '';
 
     return { response: text };

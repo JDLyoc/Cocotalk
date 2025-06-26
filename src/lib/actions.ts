@@ -61,8 +61,8 @@ export async function handleChat(
 ) {
   try {
     let contextText = "";
-    
     const apiMessages = [...history];
+    const lastUserMessage = apiMessages.length > 0 ? apiMessages[apiMessages.length - 1] : null;
 
     if (file) {
       if (file.type.startsWith("image/")) {
@@ -89,19 +89,14 @@ export async function handleChat(
       }
     }
 
-    if (contextText) {
-      const lastMessage = apiMessages[apiMessages.length - 1];
-      if (lastMessage && lastMessage.role === 'user') {
-          lastMessage.content = `${contextText}\n\nMessage de l'utilisateur: ${lastMessage.content}`;
-      }
+    // Robustly add context to the last user message.
+    if (contextText && lastUserMessage && lastUserMessage.role === 'user') {
+      lastUserMessage.content = `${contextText}\n\nMessage de l'utilisateur: ${lastUserMessage.content}`;
     }
     
+    // Final check to ensure we never send an empty request.
     if (apiMessages.length === 0) {
-        if (contextText) {
-            apiMessages.push({ role: 'user', content: contextText });
-        } else {
-            return { response: '', error: "Impossible d'envoyer une conversation vide." };
-        }
+        return { response: '', error: "Impossible d'envoyer une conversation vide. Veuillez ajouter un message ou un fichier." };
     }
 
     const chatResult = await multilingualChat({ 
