@@ -263,10 +263,11 @@ const handleSendMessage = async (text: string, file: File | null) => {
             content: text,
             ...(file && { file: { name: file.name, type: file.type } }),
         };
-
-        await updateDoc(convRef, { messages: [...baseMessages, userMessage] });
         
-        const messagesForGenkit = [...baseMessages, userMessage]
+        const messagesToStore = [...baseMessages, userMessage];
+        await updateDoc(convRef, { messages: messagesToStore });
+        
+        const messagesForGenkit = messagesToStore
             .map(msg => ({
                 role: msg.role === 'assistant' ? 'model' : 'user',
                 content: msg.content,
@@ -281,9 +282,10 @@ const handleSendMessage = async (text: string, file: File | null) => {
             const origin = cocotalks.find(c => c.id === activeConversation.cocotalkOriginId);
             agentContext = origin 
                 ? { persona: origin.persona, rules: origin.instructions }
-                : { persona: "A helpful assistant.", rules: "You are a helpful assistant. The custom instructions for this conversation could not be found because the original agent was deleted. Inform the user about this and then proceed with the conversation as a general-purpose assistant." };
+                : { persona: "A helpful assistant.", rules: "The custom instructions for this conversation could not be found because the original agent was deleted. Inform the user about this and then proceed with the conversation as a general-purpose assistant." };
         } else {
-            agentContext = { persona: "A friendly and helpful assistant.", rules: "Your job is to have a simple, helpful conversation. Respond clearly and concisely to the user's questions." };
+            // This is a standard chat. Send no specific persona or rules.
+            agentContext = {};
         }
 
         const { response, error } = await handleChat(messagesForGenkit, file, agentContext, model);
@@ -298,7 +300,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
             content: typeof response === 'string' ? response : '', 
         };
         
-        await updateDoc(convRef, { messages: [...baseMessages, userMessage, assistantMessage] });
+        await updateDoc(convRef, { messages: [...messagesToStore, assistantMessage] });
 
     } catch (e: any) {
         const errorMsg = e.message || "An error occurred. Please try again.";
@@ -435,7 +437,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
     }
 
     return messages
-        .map(msg => {
+        .map((msg) => {
             if (!msg || typeof msg !== 'object') {
                 return null;
             }
@@ -555,5 +557,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
     </div>
   );
 }
+
+    
 
     
