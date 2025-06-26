@@ -33,7 +33,7 @@ export interface DisplayMessage {
   text_content?: string;
 }
 
-// Interface for messages stored in Firestore (plain data)
+// Interface for messages stored in Firestore
 export interface StoredMessage {
   id: string;
   role: "user" | "assistant" | "system";
