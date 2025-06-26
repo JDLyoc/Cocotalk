@@ -4,7 +4,7 @@
 import * as React from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ChatPanel } from "@/components/chat-panel";
-import { processUserMessage } from "@/lib/actions";
+import { invokeAiChat } from "@/lib/actions";
 import { useToast } from "@/hooks/use-toast";
 import { AppHeader } from "@/components/app-header";
 import { auth, db } from "@/lib/firebase";
@@ -22,8 +22,8 @@ import {
   updateDoc,
   deleteDoc,
   setDoc,
+  arrayUnion,
 } from "firebase/firestore";
-import type { CocotalkFormValues } from "@/components/cocotalk-form";
 import type {
   StoredMessage,
   StoredConversation,
@@ -31,6 +31,7 @@ import type {
   DisplayMessage,
   DisplayConversation,
 } from "@/lib/types";
+import type { CocotalkFormValues } from "@/components/cocotalk-form";
 
 function AppSkeleton() {
     return (
@@ -103,7 +104,7 @@ export default function Home() {
       setIsAuthReady(true);
     });
     return () => unsubscribe();
-  }, [toast]);
+  }, []);
 
   // Effect 1: Fetch conversations when user is ready.
   React.useEffect(() => {
@@ -133,7 +134,7 @@ export default function Home() {
     });
 
     return () => unsubscribe();
-  }, [isAuthReady, currentUser, toast]);
+  }, [isAuthReady, currentUser]);
 
   // Effect 2: Set the initial active conversation after data has loaded.
   React.useEffect(() => {
@@ -167,7 +168,7 @@ export default function Home() {
     });
 
     return () => unsubscribe();
-  }, [isAuthReady, currentUser, toast]);
+  }, [isAuthReady, currentUser]);
 
   const handleSendMessage = async (text: string, file: File | null) => {
     if (!currentUser) {
@@ -175,37 +176,73 @@ export default function Home() {
       return;
     }
     
-    // We will ignore files for now to ensure text works.
     const messageContent = text.trim();
-    if (!messageContent) {
+    if (!messageContent && !file) {
       return;
     }
 
     setIsLoading(true);
 
+    const userMessageForDb: StoredMessage = {
+        id: `user_${Date.now()}`,
+        role: 'user',
+        content: messageContent,
+        // TODO: File handling will be re-implemented here
+    };
+
+    // If it's an existing conversation, use its history.
+    // If it's a new one (or a cocotalk), the history is empty.
+    const history = activeConversation ? activeConversation.messages : [];
+
     try {
-      // The client now sends LESS information. The server is in charge.
-      const result = await processUserMessage({
-        userId: currentUser.uid,
-        conversationId: activeConversationId,
-        messageContent: messageContent,
-        model: model,
-        activeCocotalk: activeCocotalk || null,
+      // Step 1: Call the AI-only server action
+      const aiResult = await invokeAiChat({
+          conversationHistory: history,
+          messageContent: messageContent,
+          model: model,
+          activeCocotalk: activeCocotalk || null,
       });
 
-      if (result.error) {
+      if (aiResult.error || !aiResult.response) {
         toast({
           variant: "destructive",
           title: "Erreur de l'IA",
-          description: result.error,
+          description: aiResult.error || "L'IA n'a pas pu générer de réponse.",
         });
+        setIsLoading(false);
+        return;
+      }
+      
+      const modelMessageForDb: StoredMessage = {
+          id: `model_${Date.now() + 1}`,
+          role: 'model',
+          content: aiResult.response,
+      };
+
+      // Step 2: Handle the database write on the client
+      if (activeConversationId) {
+        // Update existing conversation
+        const convRef = doc(db, "users", currentUser.uid, "conversations", activeConversationId);
+        await updateDoc(convRef, {
+            messages: arrayUnion(userMessageForDb, modelMessageForDb)
+        });
+
+      } else {
+        // Create new conversation
+        const newTitle = activeCocotalk?.title || messageContent.substring(0, 30).trim() || "Nouvelle Conversation";
+        
+        const newConvRef = await addDoc(collection(db, "users", currentUser.uid, "conversations"), {
+            title: newTitle,
+            messages: [userMessageForDb, modelMessageForDb],
+            userId: currentUser.uid,
+            createdAt: serverTimestamp(),
+            ...(activeCocotalk && { cocotalkOriginId: activeCocotalk.id }),
+        });
+        
+        // Select the new conversation
+        selectConversation(newConvRef.id);
       }
 
-      // If a new chat was created, select it.
-      // The onSnapshot listener will update the conversation list automatically.
-      if (result.newConversationId && !activeConversationId) {
-        setActiveConversationId(result.newConversationId);
-      }
     } catch (e: any) {
       console.error("Erreur inattendue dans handleSendMessage:", e);
       toast({

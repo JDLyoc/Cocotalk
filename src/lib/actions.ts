@@ -1,73 +1,52 @@
+'use server';
 
-"use server";
-
-import { multilingualChat } from "@/ai/flows/multilingual-chat";
-import type { StoredMessage, StoredCocotalk } from "@/lib/types";
-import type { Message } from "genkit";
-import { db } from "./firebase";
 import {
-  collection,
-  addDoc,
-  updateDoc,
-  doc,
-  serverTimestamp,
-  arrayUnion,
-  getDoc,
-} from "firebase/firestore";
+  multilingualChat,
+  type MultilingualChatInput,
+  type MultilingualChatOutput,
+} from '@/ai/flows/multilingual-chat';
+import type {Message} from 'genkit';
+import type {StoredCocotalk, StoredMessage} from './types';
+import type {AvailableModel} from '@/contexts/model-context';
 
-interface ProcessMessageInput {
-  userId: string;
-  conversationId: string | null;
+interface InvokeAiChatInput {
+  conversationHistory: StoredMessage[];
   messageContent: string;
-  model: string;
+  model: AvailableModel;
   activeCocotalk: StoredCocotalk | null;
 }
 
-export async function processUserMessage(input: ProcessMessageInput): Promise<{ newConversationId?: string; error?: string }> {
-    const { userId, conversationId, messageContent, model, activeCocotalk } = input;
+// This server action ONLY calls the AI. It does not touch the database.
+// All database operations are handled on the client where the user is authenticated.
+export async function invokeAiChat(
+  input: InvokeAiChatInput
+): Promise<MultilingualChatOutput> {
+  const {conversationHistory, messageContent, model, activeCocotalk} = input;
 
-    try {
-        // TEST: Bypassing the AI call as suggested by the user.
-        const aiResponse = "Ceci est une réponse de test pour vérifier la sauvegarde.";
+  try {
+    // We construct the history for Genkit from our stored messages.
+    const historyForGenkit: Message[] = conversationHistory.map((msg) => ({
+      role: msg.role,
+      content: msg.content,
+    }));
 
-        const userMessageForDb: StoredMessage = {
-            id: `user_${Date.now()}`,
-            role: 'user',
-            content: messageContent,
-        };
-        const modelMessageForDb: StoredMessage = {
-            id: `model_${Date.now() + 1}`,
-            role: 'model',
-            content: aiResponse,
-        };
+    // Add the new user message to the history.
+    historyForGenkit.push({role: 'user', content: messageContent});
 
-        if (conversationId) {
-            // This part is for existing conversations, our test focuses on new ones.
-            const conversationRef = doc(db, "users", userId, "conversations", conversationId);
-            await updateDoc(conversationRef, {
-                messages: arrayUnion(userMessageForDb, modelMessageForDb)
-            });
-            return { newConversationId: conversationId };
-        } else {
-            // This is the critical part for our test: creating a new conversation.
-            const newTitle = activeCocotalk?.title || messageContent.substring(0, 30).trim() || "Nouvelle Conversation";
-            
-            const newConvData = {
-                title: newTitle,
-                messages: [userMessageForDb, modelMessageForDb],
-                userId: userId,
-                createdAt: serverTimestamp(),
-                ...(activeCocotalk && { cocotalkOriginId: activeCocotalk.id }),
-            };
-            const conversationRef = await addDoc(collection(db, "users", userId, "conversations"), newConvData);
-            return { newConversationId: conversationRef.id };
-        }
+    const aiInput: MultilingualChatInput = {
+      messages: historyForGenkit,
+      persona: activeCocotalk?.persona,
+      rules: activeCocotalk?.instructions,
+      model: model,
+    };
 
-    } catch (error: any) {
-        console.error("Critical error in processUserMessage (test mode):", error);
-        if (error.code === 'permission-denied') {
-            return { error: "Erreur de permission. Vérifiez les règles de sécurité de Firestore." };
-        }
-        return { error: `Une erreur de sauvegarde est survenue: ${error.message}` };
-    }
+    const result = await multilingualChat(aiInput);
+
+    return result;
+  } catch (error: any) {
+    console.error('Error in invokeAiChat server action:', error);
+    return {
+      error: `An unexpected error occurred while contacting the AI: ${error.message}`,
+    };
+  }
 }
