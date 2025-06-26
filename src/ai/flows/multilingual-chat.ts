@@ -40,7 +40,7 @@ export async function multilingualChat(input: MultilingualChatInput): Promise<Mu
 }
 
 
-// The main flow. It is now a generic agent that can use tools.
+// The main flow. It now properly handles tool calls in a loop.
 const multilingualChatFlow = ai.defineFlow(
   {
     name: 'multilingualChatFlow',
@@ -50,8 +50,6 @@ const multilingualChatFlow = ai.defineFlow(
   async (input) => {
     const { messages, persona, rules } = input;
     
-    // Construct the system prompt that tells the AI how to behave.
-    // This now includes instructions on how to use available tools.
     const systemPrompt = `You are a powerful and flexible conversational AI assistant.
 Your behavior is defined by the following persona and rules. You MUST follow them.
 
@@ -68,25 +66,53 @@ ${rules || 'Have a friendly and helpful conversation with the user.'}
 You have access to a web search tool. Use it by calling 'searchWeb' when you need recent information, facts, news, or up-to-date data to answer a user's request.
 `;
 
-    // Call the AI with the system prompt, conversation history, and available tools.
-    const genkitResponse = await ai.generate({
-      model: 'googleai/gemini-2.0-flash',
+    // Start the generation process
+    let genkitResponse = await ai.generate({
+      model: 'googleai/gemini-2.0-flash', // Using the app's default model
       system: systemPrompt,
       history: messages as Message[],
       tools: [searchWebTool],
+      toolChoice: 'auto', 
     });
 
-    // DEFENSIVE RESPONSE HANDLING: This is the definitive fix at the source.
-    // We do not trust the API response. It might be missing the 'text' field if the
-    // request was blocked for safety, if it was a tool call, or if an error occurred.
-    //
-    // `genkitResponse?.text` safely accesses the 'text' property. If `genkitResponse`
-    // is null or undefined, it returns undefined instead of crashing.
-    // `?? ''` (nullish coalescing) ensures that if the result is null or undefined,
-    // we get a safe, empty string as a fallback.
+    // Loop to handle tool calls until a final text response is generated
+    while (true) {
+        // If the response is text, we're done. Break the loop.
+        if (genkitResponse.text) {
+            break;
+        }
+
+        // If the response contains tool calls, execute them.
+        const toolCalls = genkitResponse.toolCalls();
+        if (toolCalls.length > 0) {
+            const toolOutputs: any[] = [];
+            // Execute each tool requested by the model
+            for (const call of toolCalls) {
+                console.log('Tool call requested:', call);
+                const output = await ai.runTool(call);
+                toolOutputs.push(output);
+            }
+            
+            // Send the tool results back to the model to get a final response
+            genkitResponse = await ai.generate({
+                model: 'googleai/gemini-2.0-flash', // Using the app's default model
+                system: systemPrompt,
+                // The history now includes the model's request and the tool's output
+                history: [...(messages as Message[]), genkitResponse.message, ...toolOutputs], 
+                tools: [searchWebTool],
+                toolChoice: 'auto',
+            });
+        } else {
+            // If there's no text and no tool calls, it's an unusual state.
+            // Break the loop to prevent it from running forever.
+            console.warn("Generation response has no text and no tool calls. Breaking loop.");
+            break;
+        }
+    }
+
+    // The final defensive check, applied after the tool-calling loop is complete.
     const text = genkitResponse?.text ?? '';
 
-    // We now guarantee that we are returning an object that matches our defined output schema.
     return { response: text };
   }
 );
