@@ -57,6 +57,7 @@ export interface StoredConversation {
   messages: StoredMessage[];
   createdAt: Timestamp;
   userId: string;
+  cocotalkOriginId?: string;
 }
 
 // Interface for custom assistants (Cocotalks)
@@ -67,6 +68,7 @@ export interface StoredCocotalk {
   persona?: string;
   instructions: string;
   starterMessage: string;
+  greetingMessage?: string;
   createdAt: Timestamp;
   userId: string;
 }
@@ -213,10 +215,19 @@ const handleSendMessage = async (text: string, file: File | null) => {
 
   let currentChatId = activeConversationId;
   const userId = auth.currentUser.uid;
-  const isCocotalkSession = !!activeCocotalk;
+  
+  let customContext;
+  if (activeCocotalk) { // From a cocotalk session that has not started
+    customContext = { instructions: activeCocotalk.instructions, persona: activeCocotalk.persona };
+  } else if (activeConversation?.cocotalkOriginId) { // From an existing cocotalk conversation
+    const origin = cocotalks.find(c => c.id === activeConversation.cocotalkOriginId);
+    if(origin) {
+       customContext = { instructions: origin.instructions, persona: origin.persona };
+    }
+  }
 
   try {
-      if (!currentChatId && !isCocotalkSession) {
+      if (!currentChatId && !activeCocotalk) {
            const newTitle = text
               ? text.split(' ').slice(0, 3).join(' ') + (text.split(' ').length > 3 ? '...' : '')
               : file?.name || "Nouvelle conversation";
@@ -231,7 +242,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
           setActiveConversationId(newConvRef.id);
       }
       
-      if (!currentChatId && isCocotalkSession) {
+      if (!currentChatId && activeCocotalk) {
           const newConvRef = await addDoc(collection(db, "users", userId, "conversations"), {
               title: activeCocotalk.title,
               messages: [],
@@ -243,9 +254,22 @@ const handleSendMessage = async (text: string, file: File | null) => {
           selectConversation(newConvRef.id);
       }
 
-
       const convRef = doc(db, "users", userId, "conversations", currentChatId!);
-      const currentMessages = conversations.find(c => c.id === currentChatId)?.messages || [];
+      
+      const currentStoredConversation = conversations.find(c => c.id === currentChatId);
+      const currentMessages = currentStoredConversation?.messages || [];
+      const messagesWithUser = [...currentMessages];
+
+      // If this is the very first message in a Cocotalk session, add the greeting first
+      if(activeCocotalk && currentMessages.length === 0 && activeCocotalk.greetingMessage) {
+        const greetingMessage: StoredMessage = {
+          id: Date.now().toString() + 'g',
+          role: 'assistant',
+          content: activeCocotalk.greetingMessage,
+        };
+        messagesWithUser.push(greetingMessage);
+      }
+
 
       // Add user message
       const userMessage: StoredMessage = {
@@ -254,14 +278,13 @@ const handleSendMessage = async (text: string, file: File | null) => {
           content: text,
           ...(file && { file: { name: file.name, type: file.type } }),
       };
-      const messagesWithUser = [...currentMessages, userMessage];
+      messagesWithUser.push(userMessage);
+
       await updateDoc(convRef, { messages: messagesWithUser });
 
       // Call AI for response
       const apiHistory = messagesWithUser.map(m => ({...m, content: <p>{m.content}</p>, text_content: m.content})) as any;
-      const response = await handleChat(apiHistory, text, file, 
-        isCocotalkSession ? { instructions: activeCocotalk.instructions, persona: activeCocotalk.persona } : undefined
-      );
+      const response = await handleChat(apiHistory, text, file, customContext);
 
       if (response.error) {
           throw new Error(response.error);
@@ -436,6 +459,17 @@ const handleSendMessage = async (text: string, file: File | null) => {
     messages: toDisplayMessages(activeConversation.messages),
   } : null;
 
+  const initialCocotalkMessages: DisplayMessage[] = [];
+  if (activeCocotalk?.greetingMessage) {
+    initialCocotalkMessages.push({
+      id: 'greeting',
+      role: 'assistant',
+      content: <p className="!my-0">{activeCocotalk.greetingMessage}</p>,
+      text_content: activeCocotalk.greetingMessage
+    });
+  }
+
+
   return (
     <div className="flex flex-col h-screen w-full bg-background overflow-hidden">
       <AppHeader />
@@ -465,7 +499,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
           ) : activeCocotalk ? (
             <ChatPanel
              key={activeCocotalk.id}
-             messages={[]}
+             messages={initialCocotalkMessages}
              onSendMessage={handleSendMessage}
              isLoading={isLoading}
              activeCocotalk={activeCocotalk}

@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -48,9 +49,11 @@ function CocotalkWelcomeScreen({ cocotalk, onStarterClick }: { cocotalk: StoredC
         <p className="text-muted-foreground mt-2 max-w-md">
           {cocotalk.description}
         </p>
-        <Button variant="outline" className="mt-6" onClick={() => onStarterClick(cocotalk.starterMessage)}>
-            {cocotalk.starterMessage}
-        </Button>
+        {cocotalk.starterMessage && (
+            <Button variant="outline" className="mt-6" onClick={() => onStarterClick(cocotalk.starterMessage)}>
+                {cocotalk.starterMessage}
+            </Button>
+        )}
       </div>
     );
 }
@@ -104,20 +107,24 @@ export function ChatPanel({ messages, onSendMessage, isLoading, isWelcomeMode = 
     setText(starter);
   };
 
-  const docTypes = "text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  const docTypes = "application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain";
   const imageTypes = "image/jpeg,image/png,image/webp,image/gif";
+
+  const showWelcome = isWelcomeMode && messages.length === 0;
+  const showCocotalkWelcome = activeCocotalk && messages.length <= 1 && !messages.some(m => m.role === 'user');
 
   return (
     <div className="flex h-full flex-col relative">
       <div className="flex-1 relative">
         <ScrollArea className="absolute inset-0 p-4" ref={scrollAreaRef}>
-          {isWelcomeMode && messages.length === 0 && <WelcomeScreen />}
-          {activeCocotalk && messages.length === 0 && <CocotalkWelcomeScreen cocotalk={activeCocotalk} onStarterClick={handleStarterClick} />}
+          {showWelcome && <WelcomeScreen />}
+          {showCocotalkWelcome && <CocotalkWelcomeScreen cocotalk={activeCocotalk} onStarterClick={handleStarterClick} />}
+          
           <div className="space-y-6">
             {messages.map((msg) => (
               <ChatMessage key={msg.id} role={msg.role} content={msg.content} />
             ))}
-            {isLoading && (
+            {isLoading && messages.length > 0 && (
                <ChatMessage id="loading" role="assistant" content={<div className="flex items-center gap-2"><Loader2 className="h-5 w-5 animate-spin" /><span>L'assistant réfléchit...</span></div>} />
             )}
           </div>
@@ -143,6 +150,7 @@ export function ChatPanel({ messages, onSendMessage, isLoading, isWelcomeMode = 
                   type="button"
                   variant="ghost"
                   size="icon"
+                  onClick={() => toast({ description: "Choisissez une option" })}
                 >
                   <Paperclip className="h-5 w-5" />
                   <span className="sr-only">Joindre un fichier</span>

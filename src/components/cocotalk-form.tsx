@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -49,6 +50,11 @@ const formSchema = z.object({
   starterMessage: z
     .string()
     .min(1, { message: "Le message d'amorce est obligatoire." }),
+  greetingMessage: z
+    .string()
+    .max(500, { message: "Le message d'accueil ne doit pas dépasser 500 caractères." })
+    .optional()
+    .or(z.literal('')),
 });
 
 export type CocotalkFormValues = z.infer<typeof formSchema>;
@@ -70,6 +76,7 @@ export function CocotalkForm({ open, onOpenChange, onSubmit, cocotalkToEdit, isL
       persona: '',
       instructions: '',
       starterMessage: '',
+      greetingMessage: '',
     },
   });
 
@@ -82,6 +89,7 @@ export function CocotalkForm({ open, onOpenChange, onSubmit, cocotalkToEdit, isL
             persona: cocotalkToEdit.persona || '',
             instructions: cocotalkToEdit.instructions,
             starterMessage: cocotalkToEdit.starterMessage,
+            greetingMessage: cocotalkToEdit.greetingMessage || '',
         });
         } else {
         form.reset({
@@ -90,6 +98,7 @@ export function CocotalkForm({ open, onOpenChange, onSubmit, cocotalkToEdit, isL
             persona: '',
             instructions: '',
             starterMessage: '',
+            greetingMessage: '',
         });
         }
     }
@@ -174,6 +183,22 @@ export function CocotalkForm({ open, onOpenChange, onSubmit, cocotalkToEdit, isL
                   </FormItem>
                 )}
               />
+               <FormField
+                control={form.control}
+                name="greetingMessage"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Message d'accueil (Optionnel)</FormLabel>
+                    <FormControl>
+                      <Textarea placeholder="Bonjour ! Je suis votre expert en marketing. Quelle est votre idée de campagne pour aujourd'hui ?" {...field} className="min-h-[80px]" />
+                    </FormControl>
+                    <FormDescription>
+                      Le premier message que l'assistant affichera. 500 caractères max.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <FormField
                 control={form.control}
                 name="starterMessage"
@@ -184,7 +209,7 @@ export function CocotalkForm({ open, onOpenChange, onSubmit, cocotalkToEdit, isL
                       <Input placeholder="Quelle est ton idée de campagne pour aujourd'hui ?" {...field} />
                     </FormControl>
                     <FormDescription>
-                      Le message qui sera affiché pour lancer la conversation.
+                      Une suggestion de message pour lancer la conversation, qui apparaîtra comme un bouton.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
