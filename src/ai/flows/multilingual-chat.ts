@@ -51,7 +51,7 @@ const multilingualChatFlow = ai.defineFlow(
     const { messages, persona, rules, model } = input;
     const activeModel = model || 'googleai/gemini-2.0-flash';
     
-    // Make a mutable copy to avoid side effects
+    // The history is now pre-sanitized by the calling action. We can trust it.
     let historyForGenkit: Message[] = JSON.parse(JSON.stringify(messages));
 
     // For a standard chat, persona and rules will be undefined, and this block will be skipped.
@@ -76,15 +76,12 @@ You have access to a web search tool. Use it by calling 'searchWeb' when you nee
       // Inject the system prompt into the first user message, which is how Gemini prefers it.
       if (historyForGenkit.length > 0 && historyForGenkit[0].role === 'user') {
         historyForGenkit[0].content = `${systemPromptText}\n\n---\n\nUser Request:\n${historyForGenkit[0].content}`;
-      } else {
-        // If history is empty or starts with the model, add a new user message.
-        historyForGenkit.unshift({ role: 'user', content: systemPromptText });
       }
     }
 
-    // FINAL SAFEGUARD: Ensure we never call the AI with an empty history.
-    if (historyForGenkit.length === 0) {
-        console.error("CRITICAL: multilingualChatFlow history is empty right before calling ai.generate(). This should have been caught earlier.");
+    // The data is now clean, so a final check is less critical, but good practice.
+    if (!historyForGenkit || historyForGenkit.length === 0) {
+        console.error("CRITICAL: multilingualChatFlow history is empty. This should have been caught by the server action.");
         return { response: "Je suis désolé, une erreur interne m'empêche de répondre. Veuillez réessayer." };
     }
 

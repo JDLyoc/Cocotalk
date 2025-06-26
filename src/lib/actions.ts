@@ -5,6 +5,7 @@ import { multilingualChat } from "@/ai/flows/multilingual-chat";
 import { decodeImage } from "@/ai/flows/image-decoder";
 import { summarizeDocument } from "@/ai/flows/summarize-document";
 import type { StoredCocotalk, StoredMessage } from "@/app/page";
+import type { Message } from "genkit";
 
 const mammoth = require('mammoth');
 import * as xlsx from 'xlsx';
@@ -48,34 +49,76 @@ async function extractTextFromFile(file: File): Promise<string> {
     }
 }
 
+/**
+ * Sanitizes the conversation history to ensure it's valid for the Gemini API.
+ * - Filters out invalid, system, or empty messages.
+ * - Ensures roles strictly alternate between 'user' and 'model'.
+ * - Maps 'assistant' role to 'model'.
+ * - Ensures the conversation starts with a 'user' message.
+ */
+function sanitizeHistory(history: StoredMessage[]): Message[] {
+    // 1. Filter for valid, non-empty messages and map roles.
+    const mappedMessages: Message[] = history
+        .map(msg => ({
+            role: msg.role === 'assistant' ? 'model' : msg.role,
+            content: msg.content
+        }))
+        .filter((msg): msg is Message =>
+            (msg.role === 'user' || msg.role === 'model') &&
+            typeof msg.content === 'string'
+        );
+
+    if (mappedMessages.length === 0) {
+        return [];
+    }
+    
+    // 2. Ensure roles alternate correctly.
+    const alternatingHistory: Message[] = [];
+    if (mappedMessages.length > 0) {
+        // Start with the first message.
+        alternatingHistory.push(mappedMessages[0]);
+        // Iterate through the rest.
+        for (let i = 1; i < mappedMessages.length; i++) {
+            // If the role is different from the last one added, push it.
+            if (mappedMessages[i].role !== alternatingHistory[alternatingHistory.length - 1].role) {
+                alternatingHistory.push(mappedMessages[i]);
+            }
+        }
+    }
+
+    // 3. Ensure the conversation starts with a 'user' message.
+    const firstUserIndex = alternatingHistory.findIndex(m => m.role === 'user');
+    if (firstUserIndex === -1) {
+        return []; // No user messages, history is invalid.
+    }
+
+    return alternatingHistory.slice(firstUserIndex);
+}
+
 export async function handleChat(
   history: StoredMessage[], 
   file: File | null,
   cocotalkContext: StoredCocotalk | undefined,
   model: string
 ) {
-  // Defensively clean the history to remove any corrupted messages.
-  // A valid message must be an object with a 'role' and a string 'content'.
-  const cleanHistory = history.filter(msg => 
-      msg &&
-      typeof msg.role === 'string' &&
-      typeof msg.content === 'string'
-  );
-
-  // If after cleaning the history is empty AND there's no file, we cannot proceed.
-  if (cleanHistory.length === 0 && !file) {
-    const errorMsg = "Cannot process a request with no valid messages or file.";
-    console.error(`Error in handleChat: ${errorMsg} Original history had ${history.length} items.`);
-    return { response: '', error: errorMsg };
-  }
 
   try {
-    let historyForGenkit = cleanHistory.map(msg => ({
-      role: msg.role === 'assistant' ? 'model' : 'user',
-      content: msg.content,
-    }));
+    // Sanitize the history provided by the client. This is the crucial step.
+    let historyForGenkit = sanitizeHistory(history);
 
-    // Handle file context if present.
+    // The user's most recent message is the last one in the history.
+    // It should have been added by the client, so it's the last item.
+    const lastUserMessage = historyForGenkit.length > 0 && historyForGenkit[historyForGenkit.length - 1].role === 'user' 
+        ? historyForGenkit[historyForGenkit.length - 1] 
+        : null;
+
+    if (!lastUserMessage) {
+        const errorMsg = "A valid user message is required to start the chat.";
+        console.error(`Error in handleChat: ${errorMsg}. Sanitized History:`, historyForGenkit);
+        return { response: '', error: errorMsg };
+    }
+
+    // Handle file context if present, adding it to the last user message.
     if (file) {
       let contextText = "";
       try {
@@ -97,17 +140,16 @@ export async function handleChat(
       }
 
       // Inject context into the LAST user message.
-      const lastUserMessageIndex = historyForGenkit.map(m => m.role).lastIndexOf('user');
-      if (lastUserMessageIndex !== -1) {
-          const originalContent = historyForGenkit[lastUserMessageIndex].content;
-          historyForGenkit[lastUserMessageIndex].content = originalContent
-            ? `${contextText}\n\nMessage de l'utilisateur: ${originalContent}`.trim()
-            : contextText;
-      } else {
-        // This case occurs if the history was completely filtered out, but a file was attached.
-        // We create a new user message to carry the file context.
-        historyForGenkit.push({ role: 'user', content: contextText });
-      }
+      lastUserMessage.content = lastUserMessage.content
+        ? `${contextText}\n\nMessage de l'utilisateur: ${lastUserMessage.content}`.trim()
+        : contextText;
+    }
+    
+    // FINAL SAFEGUARD before calling the AI
+    if (historyForGenkit.length === 0) {
+      const errorMsg = "Cannot process a request with no valid messages after sanitization.";
+      console.error(`Error in handleChat: ${errorMsg}. Original history had ${history.length} items.`);
+      return { response: '', error: errorMsg };
     }
     
     // Call the AI flow with clean, validated data
