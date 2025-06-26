@@ -116,13 +116,16 @@ export async function handleChat(
         return { response: '', error: "Impossible d'envoyer une conversation vide." };
     }
 
-    const response = await multilingualChat({ 
+    const chatResult = await multilingualChat({ 
       messages: apiMessages,
       persona: agentContext?.persona,
       rules: agentContext?.rules,
     });
+    
+    // Defensive coding: ensure response is a string, even if the flow fails unexpectedly.
+    const responseText = chatResult?.response ?? '';
+    return { response: responseText, error: null };
 
-    return { ...response, error: null };
   } catch (error: any) {
       console.error("Error in handleChat:", error);
       return { response: '', error: error.message || "Une erreur inconnue est survenue dans le chat." };

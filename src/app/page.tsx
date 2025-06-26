@@ -294,7 +294,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
       const assistantMessage: StoredMessage = {
           id: Date.now().toString() + 'a',
           role: 'assistant',
-          content: response,
+          content: response || '', // Defensive coding: ensure content is always a string
       };
       await updateDoc(convRef, { messages: [...messagesToStore, assistantMessage] });
 
@@ -429,40 +429,48 @@ const handleSendMessage = async (text: string, file: File | null) => {
   }
 
   const toDisplayMessages = (messages: StoredMessage[]): DisplayMessage[] => {
-    // Filter for messages that have a valid structure. This is a lenient check.
-    const validMessages = (messages || []).filter(
-        (m): m is StoredMessage => m && typeof m.id === 'string' && typeof m.role === 'string'
-    );
-    
-    return validMessages.map(msg => {
-      let contentNode: React.ReactNode;
-      const textContent = msg.content; // Can be string or null/undefined from Firestore
+    if (!Array.isArray(messages)) {
+        return []; // Defend against non-array input from Firestore
+    }
 
-      if (msg.role === 'user') {
-          contentNode = (
-              <>
-                  {textContent && <p className="!my-0">{textContent}</p>}
-                  {msg.file && (
-                      <div className="mt-2 p-2 border rounded-lg bg-muted text-muted-foreground text-sm">
-                          Fichier joint: {msg.file.name}
-                      </div>
-                  )}
-              </>
-          );
-      } else {
-          // This is the guaranteed fix. We explicitly check if content is a string.
-          // If it is, we use it. If it's null or undefined, we treat it as an empty string.
-          const finalHtml = typeof textContent === 'string' ? textContent.replace(/\n/g, '<br />') : '';
-          contentNode = <p className="!my-0" dangerouslySetInnerHTML={{ __html: finalHtml }} />;
-      }
-      return {
-        id: msg.id,
-        role: msg.role,
-        content: contentNode,
-        text_content: typeof textContent === 'string' ? textContent : '',
-      };
-    });
-  };
+    return messages
+        .filter((m): m is StoredMessage => {
+            // Aggressive validation: must be an object with a string id and a valid role.
+            // We will handle potentially null/undefined content inside the map.
+            return m &&
+                   typeof m === 'object' &&
+                   typeof m.id === 'string' &&
+                   (m.role === 'user' || m.role === 'assistant' || m.role === 'system');
+        })
+        .map(msg => {
+            const textContent = msg.content; // Can be string, null, or undefined from Firestore
+            let contentNode: React.ReactNode;
+
+            if (msg.role === 'user') {
+                contentNode = (
+                    <>
+                        {textContent && typeof textContent === 'string' && <p className="!my-0">{textContent}</p>}
+                        {msg.file && (
+                            <div className="mt-2 p-2 border rounded-lg bg-muted text-muted-foreground text-sm">
+                                Fichier joint: {msg.file.name}
+                            </div>
+                        )}
+                    </>
+                );
+            } else {
+                // Defensive coding: Ensure textContent is a string before calling .replace()
+                const finalHtml = typeof textContent === 'string' ? textContent.replace(/\n/g, '<br />') : '';
+                contentNode = <p className="!my-0" dangerouslySetInnerHTML={{ __html: finalHtml }} />;
+            }
+            
+            return {
+              id: msg.id,
+              role: msg.role,
+              content: contentNode,
+              text_content: typeof textContent === 'string' ? textContent : '',
+            };
+        });
+    };
 
   const displayConversations: DisplayConversation[] = conversations.map(conv => ({
     id: conv.id,
@@ -542,7 +550,3 @@ const handleSendMessage = async (text: string, file: File | null) => {
     </div>
   );
 }
-
-    
-
-    
