@@ -261,6 +261,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
       
       const currentStoredConversation = conversations.find(c => c.id === currentChatId);
       
+      // Robust filtering to prevent crashes from malformed data in Firestore
       const validStoredMessages = (currentStoredConversation?.messages || []).filter(
           (m): m is StoredMessage => m && typeof m.role === 'string' && typeof m.content === 'string'
       );
@@ -294,7 +295,8 @@ const handleSendMessage = async (text: string, file: File | null) => {
       const assistantMessage: StoredMessage = {
           id: Date.now().toString() + 'a',
           role: 'assistant',
-          content: response || '', // Defensive coding: ensure content is always a string
+          // Defensive coding: ensure content is always a string before storing
+          content: response || '', 
       };
       await updateDoc(convRef, { messages: [...messagesToStore, assistantMessage] });
 
@@ -428,21 +430,28 @@ const handleSendMessage = async (text: string, file: File | null) => {
     return <AppSkeleton />;
   }
 
+  // This function is now heavily "armored" against corrupted data.
   const toDisplayMessages = (messages: StoredMessage[]): DisplayMessage[] => {
+    // 1. Ensure `messages` is an array. If not, return an empty array.
     if (!Array.isArray(messages)) {
         return [];
     }
 
+    // 2. Filter the array to only keep valid message objects.
     return messages
         .filter((m): m is StoredMessage => {
+            // A message is valid ONLY if it's an object with a string `id` and a valid `role`.
+            // The `content` can be a string or null at this stage, we'll handle that next.
             return m &&
                    typeof m === 'object' &&
                    typeof m.id === 'string' &&
                    (m.role === 'user' || m.role === 'assistant' || m.role === 'system');
         })
         .map(msg => {
-            // Defensive coding: Ensure textContent is a string before any operations.
+            // 3. ARMOR PLATING: Defensively handle the `content` of each valid message.
+            // If `msg.content` is null, undefined, or not a string, treat it as an empty string.
             const textContent = (typeof msg.content === 'string') ? msg.content : '';
+            
             let contentNode: React.ReactNode;
 
             if (msg.role === 'user') {
@@ -457,7 +466,8 @@ const handleSendMessage = async (text: string, file: File | null) => {
                     </>
                 );
             } else {
-                // The replace operation is now only ever called on a guaranteed string.
+                // The .replace() operation is now GUARANTEED to be called on a string.
+                // This makes it impossible for `Cannot read properties of null (reading 'replace')` to occur here.
                 const finalHtml = textContent.replace(/\n/g, '<br />');
                 contentNode = <p className="!my-0" dangerouslySetInnerHTML={{ __html: finalHtml }} />;
             }
@@ -466,7 +476,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
               id: msg.id,
               role: msg.role,
               content: contentNode,
-              text_content: textContent, // This is also guaranteed to be a string
+              text_content: textContent,
             };
         });
     };

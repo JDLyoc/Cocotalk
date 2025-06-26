@@ -4,12 +4,13 @@
 /**
  * @fileOverview A generic, instruction-driven, multilingual chat AI agent.
  * This agent can adopt any persona and follow any conversational scenario
- * defined in the user-provided instructions.
+ * defined in the user-provided instructions. It can also use tools like web search.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import type { Message } from 'genkit';
+import { searchWebTool } from '@/ai/tools/web-search';
 
 // Define the schema for a single message in the conversation
 const MessageSchema = z.object({
@@ -39,8 +40,7 @@ export async function multilingualChat(input: MultilingualChatInput): Promise<Mu
 }
 
 
-// The main flow. It is no longer a state machine.
-// It's a generic agent that executes user-defined instructions.
+// The main flow. It is now a generic agent that can use tools.
 const multilingualChatFlow = ai.defineFlow(
   {
     name: 'multilingualChatFlow',
@@ -51,7 +51,7 @@ const multilingualChatFlow = ai.defineFlow(
     const { messages, persona, rules } = input;
     
     // Construct the system prompt that tells the AI how to behave.
-    // This is the core of the "Super-Agent" pattern.
+    // This now includes instructions on how to use available tools.
     const systemPrompt = `You are a powerful and flexible conversational AI assistant.
 Your behavior is defined by the following persona and rules. You MUST follow them.
 
@@ -63,18 +63,24 @@ Your main task is to follow this scenario. Analyze the entire conversation histo
 ---
 ${rules || 'Have a friendly and helpful conversation with the user.'}
 ---
+
+## Available Tools
+You have access to a web search tool. Use it by calling 'searchWeb' when you need recent information, facts, news, or up-to-date data to answer a user's request.
 `;
 
-    // Call the AI with the system prompt and the conversation history.
-    // The history is passed directly as a series of messages.
+    // Call the AI with the system prompt, conversation history, and available tools.
     const genkitResponse = await ai.generate({
       model: 'googleai/gemini-2.0-flash',
       system: systemPrompt,
       history: messages as Message[],
+      tools: [searchWebTool],
     });
 
-    // Defensive coding: use optional chaining and nullish coalescing to prevent crashes
-    // if the response is empty or blocked by safety filters.
+    // DEFENSIVE CODING: This is the critical fix.
+    // We safely access the 'text' property using optional chaining (`?.`).
+    // If 'text' is null or undefined (e.g., due to safety blocks, tool calls, or API errors),
+    // the nullish coalescing operator (`??`) provides an empty string as a fallback.
+    // This prevents the application from ever trying to call a method on `null`.
     const text = genkitResponse?.text ?? '';
 
     return { response: text };
