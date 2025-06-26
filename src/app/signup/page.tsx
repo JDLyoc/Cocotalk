@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -31,24 +32,34 @@ export default function SignUpPage() {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
+      
+      const isAdmin = email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
-      // Create a document for the user in Firestore
+      // Create a document for the user in Firestore with a role
       await setDoc(doc(db, 'users', user.uid), {
         uid: user.uid,
         email: user.email,
         createdAt: serverTimestamp(),
         lastLogin: serverTimestamp(),
+        role: isAdmin ? 'admin' : 'user',
       });
       
-      // Since we don't want to auto-sign-in, we sign the user out immediately.
-      // The user must be enabled in the console before they can log in.
-      await auth.signOut();
-
-      toast({
-        title: 'Compte créé avec succès!',
-        description: "Votre compte doit être activé par un administrateur. Vous pouvez maintenant essayer de vous connecter.",
-      });
-      router.push('/login');
+      if (isAdmin) {
+        // Admin user is logged in automatically and redirected to the app
+        toast({
+          title: 'Compte Administrateur créé!',
+          description: "Vous êtes maintenant connecté.",
+        });
+        router.push('/');
+      } else {
+        // Regular user must be enabled in the console. Sign them out.
+        await auth.signOut();
+        toast({
+          title: 'Compte créé avec succès!',
+          description: "Votre compte doit être activé par un administrateur. Vous pouvez maintenant essayer de vous connecter.",
+        });
+        router.push('/login');
+      }
 
     } catch (error: any) {
       console.error(error);
