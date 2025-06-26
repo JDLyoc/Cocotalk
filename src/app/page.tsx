@@ -217,9 +217,9 @@ const handleSendMessage = async (text: string, file: File | null) => {
   const userId = auth.currentUser.uid;
   
   let customContext;
-  if (activeCocotalk) { // From a cocotalk session that has not started
+  if (activeCocotalk) {
     customContext = { instructions: activeCocotalk.instructions, persona: activeCocotalk.persona };
-  } else if (activeConversation?.cocotalkOriginId) { // From an existing cocotalk conversation
+  } else if (activeConversation?.cocotalkOriginId) {
     const origin = cocotalks.find(c => c.id === activeConversation.cocotalkOriginId);
     if(origin) {
        customContext = { instructions: origin.instructions, persona: origin.persona };
@@ -257,46 +257,50 @@ const handleSendMessage = async (text: string, file: File | null) => {
       const convRef = doc(db, "users", userId, "conversations", currentChatId!);
       
       const currentStoredConversation = conversations.find(c => c.id === currentChatId);
-      const currentMessages = currentStoredConversation?.messages || [];
-      const messagesWithUser = [...currentMessages];
+      const historyFromDb = currentStoredConversation?.messages || [];
+      
+      const historyForApi: StoredMessage[] = [...historyFromDb];
+      const messagesToStore: StoredMessage[] = [...historyFromDb];
 
-      // If this is the very first message in a Cocotalk session, add the greeting first
-      if(activeCocotalk && currentMessages.length === 0 && activeCocotalk.greetingMessage) {
+      if(activeCocotalk && historyFromDb.length === 0 && activeCocotalk.greetingMessage) {
         const greetingMessage: StoredMessage = {
           id: Date.now().toString() + 'g',
           role: 'assistant',
           content: activeCocotalk.greetingMessage,
         };
-        messagesWithUser.push(greetingMessage);
+        historyForApi.push(greetingMessage);
+        messagesToStore.push(greetingMessage);
       }
 
-
-      // Add user message
       const userMessage: StoredMessage = {
           id: Date.now().toString(),
           role: "user",
           content: text,
           ...(file && { file: { name: file.name, type: file.type } }),
       };
-      messagesWithUser.push(userMessage);
+      messagesToStore.push(userMessage);
 
-      await updateDoc(convRef, { messages: messagesWithUser });
+      await updateDoc(convRef, { messages: messagesToStore });
 
-      // Call AI for response
-      const apiHistory = messagesWithUser.map(m => ({...m, content: <p>{m.content}</p>, text_content: m.content})) as any;
-      const response = await handleChat(apiHistory, text, file, customContext);
+      const displayHistoryForApi = historyForApi.map(m => ({
+          id: m.id, 
+          role: m.role, 
+          content: <p>{m.content}</p>,
+          text_content: m.content
+      })) as any;
+
+      const response = await handleChat(displayHistoryForApi, text, file, customContext);
 
       if (response.error) {
           throw new Error(response.error);
       }
 
-      // Add assistant response
       const assistantMessage: StoredMessage = {
           id: Date.now().toString() + 'a',
           role: 'assistant',
           content: response.response,
       };
-      await updateDoc(convRef, { messages: [...messagesWithUser, assistantMessage] });
+      await updateDoc(convRef, { messages: [...messagesToStore, assistantMessage] });
 
   } catch (e: any) {
       const errorMsg = e.message || "Une erreur est survenue. Veuillez réessayer.";
