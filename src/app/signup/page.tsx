@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -64,7 +63,9 @@ export default function SignUpPage() {
     } catch (error: any) {
       console.error(error);
       let description = 'Une erreur inconnue est survenue.';
-      if (error.code === 'auth/email-already-in-use') {
+      if (error.code && error.code.includes('api-key')) {
+        description = 'Clé API Firebase invalide. Veuillez vérifier la configuration dans votre fichier .env.';
+      } else if (error.code === 'auth/email-already-in-use') {
         description = 'Cette adresse e-mail est déjà utilisée par un autre compte.';
       } else if (error.code === 'auth/invalid-email') {
         description = "L'adresse e-mail n'est pas valide.";

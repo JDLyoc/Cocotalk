@@ -42,18 +42,22 @@ export default function LoginPage() {
     } catch (error: any) {
       console.error(error);
       let description = 'Une erreur inconnue est survenue.';
-      switch (error.code) {
-        case 'auth/user-not-found':
-        case 'auth/wrong-password':
-        case 'auth/invalid-credential':
-          description = 'Email ou mot de passe incorrect.';
-          break;
-        case 'auth/user-disabled':
-          description = 'Ce compte a été désactivé. Veuillez contacter un administrateur.';
-          break;
-        case 'auth/invalid-email':
+      if (error.code && error.code.includes('api-key')) {
+        description = 'Clé API Firebase invalide. Veuillez vérifier la configuration dans votre fichier .env.';
+      } else {
+        switch (error.code) {
+          case 'auth/user-not-found':
+          case 'auth/wrong-password':
+          case 'auth/invalid-credential':
+            description = 'Email ou mot de passe incorrect.';
+            break;
+          case 'auth/user-disabled':
+            description = 'Ce compte a été désactivé. Veuillez contacter un administrateur.';
+            break;
+          case 'auth/invalid-email':
             description = "L'adresse e-mail n'est pas valide.";
             break;
+        }
       }
       toast({ variant: 'destructive', title: 'Erreur de connexion', description });
     } finally {
