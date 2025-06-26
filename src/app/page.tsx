@@ -242,11 +242,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
         }
 
         const currentStoredConversation = conversations.find(c => c.id === currentChatId);
-        const validStoredMessages = (currentStoredConversation?.messages || []).filter(
-            (m): m is StoredMessage => m && typeof m.role === 'string' && typeof m.content === 'string'
-        );
-
-        let baseMessages: StoredMessage[] = [...validStoredMessages];
+        let baseMessages: StoredMessage[] = [...(currentStoredConversation?.messages || [])];
         if (activeCocotalk && baseMessages.length === 0 && activeCocotalk.greetingMessage) {
             const greetingMessage: StoredMessage = {
                 id: Date.now().toString() + 'g',
@@ -263,14 +259,19 @@ const handleSendMessage = async (text: string, file: File | null) => {
             ...(file && { file: { name: file.name, type: file.type } }),
         };
 
+        // First DB update with user message for immediate UI feedback
         await updateDoc(convRef, { messages: [...baseMessages, userMessage] });
-
+        
+        // **CRUCIAL FIX**: Filter history to ensure all messages sent to the AI are valid.
+        // This prevents crashes from `null` content in old messages.
         const messagesForGenkit = [...baseMessages, userMessage]
+            .filter(msg => typeof msg.content === 'string') // Ensure content is a string
             .map(msg => ({
                 role: msg.role === 'assistant' ? 'model' : 'user',
-                content: msg.content
+                content: msg.content,
             }))
             .filter(msg => msg.role === 'user' || msg.role === 'model') as Message[];
+
 
         let agentContext: { persona?: string; rules?: string; };
         if (activeCocotalk) {
@@ -296,6 +297,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
             content: typeof response === 'string' ? response : '', 
         };
         
+        // Second DB update with the assistant's response
         await updateDoc(convRef, { messages: [...baseMessages, userMessage, assistantMessage] });
 
     } catch (e: any) {
