@@ -134,10 +134,9 @@ export default function Home() {
         const userDocRef = doc(db, "users", user.uid);
         await setDoc(userDocRef, { lastLogin: serverTimestamp() }, { merge: true });
         setCurrentUser(user);
-        setIsAuthReady(true);
       } else {
         // User is signed out. Sign in anonymously.
-        signInAnonymously(auth).catch(error => {
+        await signInAnonymously(auth).catch(error => {
           console.error("Anonymous sign-in failed:", error);
           toast({
             variant: "destructive",
@@ -146,17 +145,16 @@ export default function Home() {
           });
         });
       }
+      setIsAuthReady(true);
     });
     return () => unsubscribe();
-  }, []);
+  }, [toast]);
 
+  // Effect 1: Fetch conversations when user is ready.
   React.useEffect(() => {
-    if (!isAuthReady || !currentUser) {
-        return;
-    }
-    
-    setIsDataLoading(true);
+    if (!isAuthReady || !currentUser) return;
 
+    setIsDataLoading(true);
     const q = query(
         collection(db, "users", currentUser.uid, "conversations"),
         orderBy("createdAt", "desc")
@@ -168,13 +166,7 @@ export default function Home() {
             ...doc.data(),
         } as StoredConversation));
         setConversations(conversationsData);
-        
-        if (isDataLoading) {
-            if (conversationsData.length > 0 && !activeConversationId && !activeCocotalkId) {
-                setActiveConversationId(conversationsData[0].id);
-            }
-            setIsDataLoading(false);
-        }
+        setIsDataLoading(false); // Done loading
     }, (error) => {
         console.error("Error fetching conversations:", error);
         toast({
@@ -186,9 +178,17 @@ export default function Home() {
     });
 
     return () => unsubscribe();
-}, [isAuthReady, currentUser, isDataLoading, activeConversationId, activeCocotalkId]);
+  }, [isAuthReady, currentUser, toast]);
 
-React.useEffect(() => {
+  // Effect 2: Set the initial active conversation after data has loaded.
+  React.useEffect(() => {
+    if (!isDataLoading && conversations.length > 0 && !activeConversationId && !activeCocotalkId) {
+        setActiveConversationId(conversations[0].id);
+    }
+  }, [isDataLoading, conversations, activeConversationId, activeCocotalkId]);
+
+
+  React.useEffect(() => {
     if (!isAuthReady || !currentUser) return;
     
     const q = query(
@@ -212,7 +212,7 @@ React.useEffect(() => {
     });
 
     return () => unsubscribe();
-  }, [isAuthReady, currentUser]);
+  }, [isAuthReady, currentUser, toast]);
 
 const handleSendMessage = async (text: string, file: File | null) => {
     if (!currentUser) {
@@ -224,29 +224,35 @@ const handleSendMessage = async (text: string, file: File | null) => {
 
     setIsLoading(true);
 
-    const originalConversations = conversations;
     const userMessage: StoredMessage = {
-        id: Date.now().toString(),
+        id: Date.now().toString(), // Temporary ID, will be replaced by Firestore
         role: 'user',
         content: messageContent,
         ...(file && { file: { name: file.name, type: file.type } }),
     };
 
+    // Optimistically update UI
     if (activeConversationId) {
-        const updatedMessages = [...(activeConversation?.messages || []), userMessage];
-        const updatedConversations = conversations.map(c => 
-            c.id === activeConversationId ? { ...c, messages: updatedMessages } : c
-        );
-        setConversations(updatedConversations);
+        const tempDisplayMessage = toDisplayMessages([userMessage])[0];
+        const activeConv = conversations.find(c => c.id === activeConversationId);
+        if (activeConv) {
+            const updatedMessages = [...activeConv.messages, userMessage];
+            const updatedConversations = conversations.map(c => 
+                c.id === activeConversationId ? { ...c, messages: updatedMessages } : c
+            );
+            setConversations(updatedConversations);
+        }
     }
+
 
     try {
         const result = await processUserMessage({
             userId: currentUser.uid,
             conversationId: activeConversationId,
-            message: userMessage,
+            messageContent: userMessage.content,
             file: file,
             model: model,
+            currentMessages: activeConversation?.messages || [],
             cocotalkContext: activeCocotalk ? {
                 originId: activeCocotalk.id,
                 title: activeCocotalk.title,
@@ -261,8 +267,16 @@ const handleSendMessage = async (text: string, file: File | null) => {
                 title: "Erreur de l'IA",
                 description: result.error,
             });
-            if (activeConversationId) {
-                setConversations(originalConversations);
+            // Revert optimistic update on error
+             if (activeConversationId) {
+                const activeConv = conversations.find(c => c.id === activeConversationId);
+                 if (activeConv) {
+                    const revertedMessages = activeConv.messages.slice(0, -1);
+                     const updatedConversations = conversations.map(c => 
+                        c.id === activeConversationId ? { ...c, messages: revertedMessages } : c
+                    );
+                    setConversations(updatedConversations);
+                }
             }
         }
         
@@ -277,9 +291,6 @@ const handleSendMessage = async (text: string, file: File | null) => {
             title: "Erreur",
             description: e.message || "Une erreur est survenue. Veuillez réessayer.",
         });
-        if (activeConversationId) {
-            setConversations(originalConversations);
-        }
     } finally {
         setIsLoading(false);
     }

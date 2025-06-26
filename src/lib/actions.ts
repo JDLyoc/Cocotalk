@@ -14,6 +14,8 @@ import {
   doc,
   serverTimestamp,
   arrayUnion,
+  getDocs,
+  writeBatch
 } from "firebase/firestore";
 
 // ===== FILE PROCESSING UTILITIES =====
@@ -54,41 +56,6 @@ async function extractTextFromFile(file: File): Promise<string> {
     }
 }
 
-/**
- * Injects file context into the user message content.
- */
-async function processAndInjectFileContext(
-    userMessage: StoredMessage,
-    file: File,
-    model: string
-): Promise<StoredMessage> {
-    let contextText = "";
-    const updatedMessage = { ...userMessage };
-
-    try {
-        if (file.type.startsWith("image/")) {
-            const photoDataUri = await fileToDataUri(file);
-            const { description } = await decodeImage({ photoDataUri, model });
-            contextText = `Contexte de l'image jointe (${file.name}): ${description}.`;
-        } else {
-            const documentContent = await extractTextFromFile(file);
-            if (!documentContent.trim()) {
-                contextText = `Le fichier joint (${file.name}) est vide ou ne contient pas de texte lisible.`;
-            } else {
-                const { summary } = await summarizeDocument({ documentContent, format: "text", model });
-                contextText = `Contexte du document (${file.name}): ${summary}.`;
-            }
-        }
-    } catch (error: any) {
-        console.error("Error processing file:", error);
-        throw new Error(`Erreur lors du traitement du fichier: ${error.message}`);
-    }
-    
-    // Prepend context to the user message.
-    updatedMessage.content = `${contextText}\n\nMessage de l'utilisateur: ${updatedMessage.content}`.trim();
-    return updatedMessage;
-}
-
 
 // ===== CORE CHAT LOGIC =====
 interface CocotalkContext {
@@ -101,29 +68,54 @@ interface CocotalkContext {
 interface ProcessMessageInput {
   userId: string;
   conversationId: string | null;
-  message: StoredMessage;
+  messageContent: string;
   file: File | null;
   model: string;
+  currentMessages: StoredMessage[];
   cocotalkContext: CocotalkContext | null;
 }
 
 export async function processUserMessage(input: ProcessMessageInput): Promise<{ newConversationId?: string; error?: string }> {
-    const { userId, conversationId, message, file, model, cocotalkContext } = input;
+    const { userId, conversationId, messageContent, file, model, currentMessages, cocotalkContext } = input;
 
     try {
-        let userMessageToProcess = message;
-        
+        let finalContent = messageContent;
+
+        // Step 1: Process file if it exists
         if (file) {
-            userMessageToProcess = await processAndInjectFileContext(message, file, model);
+            let contextText = "";
+            try {
+                if (file.type.startsWith("image/")) {
+                    const photoDataUri = await fileToDataUri(file);
+                    const { description } = await decodeImage({ photoDataUri, model });
+                    contextText = `Contexte de l'image jointe (${file.name}): ${description}.`;
+                } else {
+                    const documentContent = await extractTextFromFile(file);
+                    if (!documentContent.trim()) {
+                        contextText = `Le fichier joint (${file.name}) est vide ou ne contient pas de texte lisible.`;
+                    } else {
+                        const { summary } = await summarizeDocument({ documentContent, format: "text", model });
+                        contextText = `Contexte du document (${file.name}): ${summary}.`;
+                    }
+                }
+            } catch (error: any) {
+                console.error("Error processing file:", error);
+                return { error: `Erreur lors du traitement du fichier: ${error.message}` };
+            }
+            finalContent = `${contextText}\n\nMessage de l'utilisateur: ${messageContent}`.trim();
         }
+        
+        // Step 2: Prepare user message for AI and database
+        const userMessageForDb: StoredMessage = {
+            id: Date.now().toString(),
+            role: 'user',
+            content: finalContent,
+            ...(file && { file: { name: file.name, type: file.type } }),
+        };
+        
+        const historyForAI = [...currentMessages, userMessageForDb].map(m => ({ role: m.role, content: m.content })) as Message[];
 
-        const historyForAI: Message[] = [];
-        if (conversationId) {
-            // In a real app, you would fetch existing messages here.
-            // For this flow, we assume the client manages history and we just need the new message.
-        }
-        historyForAI.push({ role: userMessageToProcess.role, content: userMessageToProcess.content });
-
+        // Step 3: Call the AI
         const aiResult = await multilingualChat({
             messages: historyForAI,
             persona: cocotalkContext?.persona,
@@ -135,26 +127,27 @@ export async function processUserMessage(input: ProcessMessageInput): Promise<{ 
             return { error: aiResult.error };
         }
 
-        const modelMessage: StoredMessage = {
+        const modelMessageForDb: StoredMessage = {
             id: (Date.now() + 1).toString(),
             role: 'model',
             content: aiResult.response || 'Désolé, je n\'ai pas pu générer de réponse.',
         };
 
+        // Step 4: Save to Firestore
         let finalConversationId = conversationId;
 
         if (finalConversationId) {
             // Update existing conversation
             const conversationRef = doc(db, "users", userId, "conversations", finalConversationId);
             await updateDoc(conversationRef, {
-                messages: arrayUnion(userMessageToProcess, modelMessage)
+                messages: arrayUnion(userMessageForDb, modelMessageForDb)
             });
         } else {
             // Create new conversation
-            const newTitle = cocotalkContext?.title || userMessageToProcess.content.substring(0, 30).trim() || "Nouvelle Conversation";
+            const newTitle = cocotalkContext?.title || messageContent.substring(0, 30).trim() || "Nouvelle Conversation";
             const newConvData = {
                 title: newTitle,
-                messages: [userMessageToProcess, modelMessage],
+                messages: [userMessageForDb, modelMessageForDb],
                 userId: userId,
                 createdAt: serverTimestamp(),
                 ...(cocotalkContext && { cocotalkOriginId: cocotalkContext.originId }),
