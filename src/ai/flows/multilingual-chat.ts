@@ -20,7 +20,8 @@ const MessageSchema = z.object({
 });
 
 const MultilingualChatInputSchema = z.object({
-  history: z.array(MessageSchema).describe('The entire history of the conversation.'),
+  history: z.array(MessageSchema).describe('The conversation history, excluding the last message.'),
+  lastMessage: MessageSchema.describe('The last message from the user to be processed.'),
   persona: z.string().optional().describe('The persona the assistant should adopt.'),
   customInstructions: z.string().optional().describe('Custom instructions for the assistant.'),
 });
@@ -35,10 +36,16 @@ export async function multilingualChat(input: MultilingualChatInput): Promise<Mu
   return multilingualChatFlow(input);
 }
 
+const PromptInputSchema = z.object({
+  lastMessage: MessageSchema,
+  persona: z.string().optional(),
+  customInstructions: z.string().optional(),
+});
+
 const multilingualChatPrompt = ai.definePrompt({
   name: 'multilingualChatPrompt',
-  input: {schema: MultilingualChatInputSchema},
-  output: {schema: MultilingualChatOutputSchema},
+  input: { schema: PromptInputSchema },
+  output: { schema: MultilingualChatOutputSchema },
   tools: [searchWebTool],
   system: `{{#if customInstructions}}
 {{{customInstructions}}}
@@ -51,7 +58,7 @@ Persona context:
 You are a multilingual chatbot that can understand and respond in any language.
 The user will send you a message, and you must respond in the same language as the message.
 {{/if}}`,
-  prompt: ``, // The prompt is now empty, as the full history provides the context.
+  prompt: `{{{lastMessage.content}}}`,
 });
 
 const multilingualChatFlow = ai.defineFlow(
@@ -67,9 +74,13 @@ const multilingualChatFlow = ai.defineFlow(
         content: [{text: h.content}],
       })) || [];
 
-    // The entire conversation, including the latest message, is in the history.
-    // The prompt call will automatically use this history to continue the conversation.
-    const {output} = await multilingualChatPrompt(input, {history});
+    const promptInput = {
+        lastMessage: input.lastMessage,
+        persona: input.persona,
+        customInstructions: input.customInstructions
+    };
+    
+    const {output} = await multilingualChatPrompt(promptInput, { history });
     return output!;
   }
 );

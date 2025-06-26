@@ -94,15 +94,23 @@ export async function handleChat(
     }
   }
   
-  const apiHistory = conversationHistory
+  const apiMessages = conversationHistory
     .filter(m => m.role === 'user' || m.role === 'assistant')
     .map(m => ({
         role: m.role === 'user' ? 'user' : 'model',
         content: m.content || '',
     }));
 
+  if (apiMessages.length === 0) {
+      return { error: "Impossible d'envoyer une conversation vide." };
+  }
+
+  const lastMessage = apiMessages.pop()!;
+  const apiHistory = apiMessages;
+
   const response = await multilingualChat({ 
     history: apiHistory,
+    lastMessage: lastMessage,
     persona: customContext?.persona,
     customInstructions: customContext?.instructions
   });
