@@ -63,25 +63,13 @@ const multilingualChatFlow = ai.defineFlow(
       const { messages, persona, rules, model } = input;
       const activeModel = model || 'googleai/gemini-2.0-flash';
       
-      // Following your suggestion, we removed the complex validation.
-      // We trust the history provided by the calling action.
+      const systemPrompt = (persona || rules) ? createSystemPrompt(persona, rules) : undefined;
       const historyForGenkit: Message[] = [...messages];
 
-      // Inject system instructions if they exist.
-      if (persona || rules) {
-        const systemPrompt = createSystemPrompt(persona, rules);
-        const firstMessage = historyForGenkit[0];
-        
-        // The calling 'actions.ts' file guarantees the history is never empty.
-        // We prepend the instructions to the first message for the AI.
-        if(firstMessage) {
-            firstMessage.content = `${systemPrompt}\n\n---\n\nUser Request:\n${firstMessage.content}`;
-        }
-      }
-
-      // Step 3: Call the AI with the prepared history
+      // Step 3: Call the AI with the prepared history and system prompt
       const genkitResponse = await ai.generate({
         model: activeModel,
+        system: systemPrompt,
         history: historyForGenkit,
         tools: [searchWebTool],
         toolChoice: 'auto',
@@ -97,6 +85,7 @@ const multilingualChatFlow = ai.defineFlow(
         const toolOutputs = await Promise.all(toolCalls.map(ai.runTool));
         const finalResponse = await ai.generate({
           model: activeModel,
+          system: systemPrompt,
           history: [...historyForGenkit, genkitResponse.message, ...toolOutputs],
           tools: [searchWebTool],
         });
