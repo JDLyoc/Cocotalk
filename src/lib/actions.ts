@@ -4,7 +4,7 @@
 import { multilingualChat } from "@/ai/flows/multilingual-chat";
 import { decodeImage } from "@/ai/flows/image-decoder";
 import { summarizeDocument } from "@/ai/flows/summarize-document";
-import type { StoredCocotalk } from "@/app/page";
+import type { StoredMessage } from "@/app/page";
 import type { Message } from "genkit";
 
 // ===== FILE PROCESSING UTILITIES =====
@@ -47,7 +47,6 @@ async function extractTextFromFile(file: File): Promise<string> {
 
 /**
  * Injects file context into the last user message of the history.
- * If the history is empty, it creates a new user message with the context.
  */
 async function processAndInjectFileContext(
     history: Message[],
@@ -63,10 +62,11 @@ async function processAndInjectFileContext(
         } else {
             const documentContent = await extractTextFromFile(file);
             if (!documentContent.trim()) {
-                throw new Error(`Le fichier ${file.name} est vide ou illisible.`);
+                contextText = `Le fichier joint (${file.name}) est vide ou ne contient pas de texte lisible.`;
+            } else {
+                const { summary } = await summarizeDocument({ documentContent, format: "text", model });
+                contextText = `Contexte du document (${file.name}): ${summary}.`;
             }
-            const { summary } = await summarizeDocument({ documentContent, format: "text", model });
-            contextText = `Contexte du document (${file.name}): ${summary}.`;
         }
     } catch (error: any) {
         console.error("Error processing file:", error);
@@ -77,11 +77,12 @@ async function processAndInjectFileContext(
     const lastUserMessageIndex = newHistory.map(m => m.role).lastIndexOf('user');
 
     if (lastUserMessageIndex !== -1) {
-        // Append context to the last user message
         const userMessage = newHistory[lastUserMessageIndex];
+        // Prepend context to the last user message.
         userMessage.content = `${contextText}\n\nMessage de l'utilisateur: ${userMessage.content}`.trim();
     } else {
-        // If no user message exists (e.g., file sent with no text), create one
+        // This case should ideally not happen if client-side validation is good,
+        // but as a fallback, create a new user message.
         newHistory.push({
             role: 'user',
             content: contextText,
@@ -93,11 +94,10 @@ async function processAndInjectFileContext(
 
 
 // ===== CORE CHAT LOGIC =====
-
 interface BaseChatInput {
-  messages: Message[];
+  messages: StoredMessage[];
+  file: File | null;
   model: string;
-  file?: File | null;
 }
 
 interface CocotalkChatInput extends BaseChatInput {
@@ -105,38 +105,34 @@ interface CocotalkChatInput extends BaseChatInput {
   rules: string;
 }
 
-/**
- * Central function to handle all chat requests.
- * It processes files and calls the AI flow.
- */
 async function handleChat(
-    history: Message[],
+    history: StoredMessage[],
     file: File | null,
     model: string,
-    cocotalkContext?: Pick<StoredCocotalk, 'persona' | 'instructions'>
+    cocotalkContext?: { persona?: string; rules: string; }
 ): Promise<{ response: string | null; error: string | null }> {
     try {
-        let processedHistory = history;
+        let processedHistory: Message[] = history.map(({ role, content }) => ({ role, content }));
 
         // Step 1: Inject file context if a file is provided
         if (file) {
-            processedHistory = await processAndInjectFileContext(history, file, model);
+            processedHistory = await processAndInjectFileContext(processedHistory, file, model);
         }
 
         // Step 2: Call the Genkit flow with the processed history
-        const chatResult = await multilingualChat({
+        const { response, error } = await multilingualChat({
             messages: processedHistory,
             persona: cocotalkContext?.persona,
-            rules: cocotalkContext?.instructions,
+            rules: cocotalkContext?.rules,
             model: model,
         });
 
         // Step 3: Handle the response from the flow
-        if (chatResult.error) {
-            return { response: null, error: chatResult.error };
+        if (error) {
+            return { response: null, error };
         }
 
-        return { response: chatResult.response, error: null };
+        return { response, error: null };
 
     } catch (error: any) {
         console.error("Critical error in handleChat:", error);
@@ -151,7 +147,7 @@ async function handleChat(
  * Handles a standard chat conversation.
  */
 export async function standardChat(input: BaseChatInput): Promise<{ response: string | null; error: string | null }> {
-  return handleChat(input.messages, input.file || null, input.model);
+  return handleChat(input.messages, input.file, input.model);
 }
 
 /**
@@ -160,7 +156,7 @@ export async function standardChat(input: BaseChatInput): Promise<{ response: st
 export async function cocotalkChat(input: CocotalkChatInput): Promise<{ response: string | null; error: string | null }> {
   const cocotalkContext = {
     persona: input.persona,
-    instructions: input.rules,
+    rules: input.rules,
   };
-  return handleChat(input.messages, input.file || null, input.model, cocotalkContext);
+  return handleChat(input.messages, input.file, input.model, cocotalkContext);
 }

@@ -135,9 +135,8 @@ const multilingualChatFlow = ai.defineFlow(
       });
       
       // Step 4: Handle potential tool calls
-      // (This part is simplified as tool calls are not the primary issue right now)
       const toolCalls = genkitResponse.toolCalls();
-      if (toolCalls.length > 0) {
+      if (toolCalls && toolCalls.length > 0) {
         const toolOutputs = await Promise.all(toolCalls.map(ai.runTool));
         const finalResponse = await ai.generate({
           model: activeModel,

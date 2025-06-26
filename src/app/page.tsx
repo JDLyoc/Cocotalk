@@ -209,108 +209,6 @@ React.useEffect(() => {
     return () => unsubscribe();
   }, [isAuthReady, toast]);
 
-// SEPARATED MESSAGE HANDLERS
-const handleNormalMessage = async (text: string, file: File | null) => {
-  const userId = auth.currentUser!.uid;
-  let convId = activeConversationId;
-  let conversationRef;
-  let currentHistory: StoredMessage[] = [];
-
-  if (convId) {
-    conversationRef = doc(db, "users", userId, "conversations", convId);
-    const currentConv = conversations.find(c => c.id === convId);
-    currentHistory = currentConv?.messages ? [...currentConv.messages] : [];
-  } else {
-    const newTitle = text.substring(0, 30).trim() + (text.length > 30 ? '...' : '') || file?.name || "Nouvelle Conversation";
-    const newConvData = {
-      title: newTitle,
-      messages: [],
-      userId: userId,
-      createdAt: serverTimestamp(),
-    };
-    conversationRef = await addDoc(collection(db, "users", userId, "conversations"), newConvData);
-    convId = conversationRef.id;
-    selectConversation(convId);
-  }
-
-  const userMessage: StoredMessage = {
-    id: Date.now().toString(),
-    role: "user",
-    content: text,
-    ...(file && { file: { name: file.name, type: file.type } }),
-  };
-  const updatedHistory = [...currentHistory, userMessage];
-  await updateDoc(conversationRef, { messages: updatedHistory });
-
-  const { response, error } = await standardChat(updatedHistory, file, model);
-  if (error) throw new Error(error);
-
-  const modelMessage: StoredMessage = {
-    id: (Date.now() + 1).toString(),
-    role: 'model',
-    content: response || '',
-  };
-  await updateDoc(conversationRef, { messages: [...updatedHistory, modelMessage] });
-};
-
-const handleCocotalkMessage = async (text: string, file: File | null) => {
-  if (!activeCocotalk) throw new Error("Aucun Cocotalk actif");
-  
-  const userId = auth.currentUser!.uid;
-  let convId = activeConversationId;
-  let conversationRef;
-  let currentHistory: StoredMessage[] = [];
-
-  if (convId) {
-    conversationRef = doc(db, "users", userId, "conversations", convId);
-    const currentConv = conversations.find(c => c.id === convId);
-    currentHistory = currentConv?.messages ? [...currentConv.messages] : [];
-  } else {
-    const newConvData = {
-      title: activeCocotalk.title,
-      messages: [],
-      userId: userId,
-      createdAt: serverTimestamp(),
-      cocotalkOriginId: activeCocotalk.id,
-    };
-    conversationRef = await addDoc(collection(db, "users", userId, "conversations"), newConvData);
-    convId = conversationRef.id;
-    selectConversation(convId);
-  }
-
-  const userMessage: StoredMessage = {
-    id: Date.now().toString(),
-    role: "user",
-    content: text,
-    ...(file && { file: { name: file.name, type: file.type } }),
-  };
-
-  const isNewCocotalkConv = currentHistory.length === 0;
-  let historyWithGreeting = [...currentHistory];
-  
-  if (isNewCocotalkConv && activeCocotalk.greetingMessage) {
-    const greetingMessage: StoredMessage = {
-      id: 'greeting-' + Date.now(),
-      role: 'model',
-      content: activeCocotalk.greetingMessage,
-    };
-    historyWithGreeting.push(greetingMessage);
-  }
-
-  const updatedHistory = [...historyWithGreeting, userMessage];
-  await updateDoc(conversationRef, { messages: updatedHistory });
-
-  const { response, error } = await cocotalkChat(updatedHistory, file, activeCocotalk, model);
-  if (error) throw new Error(error);
-
-  const modelMessage: StoredMessage = {
-    id: (Date.now() + 1).toString(),
-    role: 'model',
-    content: response || '',
-  };
-  await updateDoc(conversationRef, { messages: [...updatedHistory, modelMessage] });
-};
-
 // MAIN MESSAGE HANDLER
 const handleSendMessage = async (text: string, file: File | null) => {
     if (!auth.currentUser) {
@@ -320,12 +218,58 @@ const handleSendMessage = async (text: string, file: File | null) => {
     if (!text.trim() && !file) return;
 
     setIsLoading(true);
+    const userId = auth.currentUser.uid;
+    let convId = activeConversationId;
+    let currentHistory: StoredMessage[] = [];
+
     try {
-        if (activeCocotalkId && activeCocotalk) {
-            await handleCocotalkMessage(text, file);
+        // Step 1: Get or Create Conversation
+        if (convId) {
+            const currentConv = conversations.find(c => c.id === convId);
+            currentHistory = currentConv?.messages ? [...currentConv.messages] : [];
         } else {
-            await handleNormalMessage(text, file);
+            const newTitle = activeCocotalk?.title || text.substring(0, 30).trim() + (text.length > 30 ? '...' : '') || file?.name || "Nouvelle Conversation";
+            const newConvData: Omit<StoredConversation, 'id'> = {
+                title: newTitle,
+                messages: [],
+                userId: userId,
+                createdAt: serverTimestamp(),
+                ...(activeCocotalk && { cocotalkOriginId: activeCocotalk.id }),
+            };
+            const conversationRef = await addDoc(collection(db, "users", userId, "conversations"), newConvData);
+            convId = conversationRef.id;
+            selectConversation(convId);
         }
+
+        const conversationRef = doc(db, "users", userId, "conversations", convId);
+
+        // Step 2: Create user message and update Firestore
+        const userMessage: StoredMessage = {
+            id: Date.now().toString(),
+            role: "user",
+            content: text,
+            ...(file && { file: { name: file.name, type: file.type } }),
+        };
+        const updatedHistory = [...currentHistory, userMessage];
+        await updateDoc(conversationRef, { messages: updatedHistory });
+
+        // Step 3: Call the appropriate server action
+        const { response, error } = activeCocotalk
+            ? await cocotalkChat({ messages: updatedHistory, file, persona: activeCocotalk.persona, rules: activeCocotalk.instructions, model })
+            : await standardChat({ messages: updatedHistory, file, model });
+
+        if (error) {
+            throw new Error(error);
+        }
+
+        // Step 4: Create model message and update Firestore again
+        const modelMessage: StoredMessage = {
+            id: (Date.now() + 1).toString(),
+            role: 'model',
+            content: response || '',
+        };
+        await updateDoc(conversationRef, { messages: [...updatedHistory, modelMessage] });
+
     } catch (e: any) {
         console.error("Error in handleSendMessage:", e);
         toast({
