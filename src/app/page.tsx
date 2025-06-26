@@ -148,7 +148,7 @@ export default function Home() {
       setIsAuthReady(true);
     });
     return () => unsubscribe();
-  }, [toast]);
+  }, []);
 
   // Effect 1: Fetch conversations when user is ready.
   React.useEffect(() => {
@@ -178,7 +178,7 @@ export default function Home() {
     });
 
     return () => unsubscribe();
-  }, [isAuthReady, currentUser, toast]);
+  }, [isAuthReady, currentUser]);
 
   // Effect 2: Set the initial active conversation after data has loaded.
   React.useEffect(() => {
@@ -212,89 +212,62 @@ export default function Home() {
     });
 
     return () => unsubscribe();
-  }, [isAuthReady, currentUser, toast]);
+  }, [isAuthReady, currentUser]);
 
-const handleSendMessage = async (text: string, file: File | null) => {
+  const handleSendMessage = async (text: string, file: File | null) => {
     if (!currentUser) {
-        toast({ variant: "destructive", title: "Erreur", description: "Utilisateur non authentifié." });
-        return;
+      toast({ variant: "destructive", title: "Erreur", description: "Utilisateur non authentifié." });
+      return;
     }
-    const messageContent = text.trim() || (file ? `Analyse du fichier: ${file.name}` : "");
-    if (!messageContent) return;
+    // Simplified logic: only handle text for now to ensure core functionality.
+    const messageContent = text.trim();
+    if (!messageContent) {
+      return;
+    }
 
     setIsLoading(true);
 
-    const userMessage: StoredMessage = {
-        id: Date.now().toString(), // Temporary ID, will be replaced by Firestore
-        role: 'user',
-        content: messageContent,
-        ...(file && { file: { name: file.name, type: file.type } }),
-    };
-
-    // Optimistically update UI
-    if (activeConversationId) {
-        const tempDisplayMessage = toDisplayMessages([userMessage])[0];
-        const activeConv = conversations.find(c => c.id === activeConversationId);
-        if (activeConv) {
-            const updatedMessages = [...activeConv.messages, userMessage];
-            const updatedConversations = conversations.map(c => 
-                c.id === activeConversationId ? { ...c, messages: updatedMessages } : c
-            );
-            setConversations(updatedConversations);
-        }
-    }
-
-
     try {
-        const result = await processUserMessage({
-            userId: currentUser.uid,
-            conversationId: activeConversationId,
-            messageContent: userMessage.content,
-            file: file,
-            model: model,
-            currentMessages: activeConversation?.messages || [],
-            cocotalkContext: activeCocotalk ? {
-                originId: activeCocotalk.id,
-                title: activeCocotalk.title,
-                persona: activeCocotalk.persona,
-                instructions: activeCocotalk.instructions
-            } : null,
-        });
-
-        if (result.error) {
-            toast({
-                variant: "destructive",
-                title: "Erreur de l'IA",
-                description: result.error,
-            });
-            // Revert optimistic update on error
-             if (activeConversationId) {
-                const activeConv = conversations.find(c => c.id === activeConversationId);
-                 if (activeConv) {
-                    const revertedMessages = activeConv.messages.slice(0, -1);
-                     const updatedConversations = conversations.map(c => 
-                        c.id === activeConversationId ? { ...c, messages: revertedMessages } : c
-                    );
-                    setConversations(updatedConversations);
-                }
+      const result = await processUserMessage({
+        userId: currentUser.uid,
+        conversationId: activeConversationId,
+        messageContent: messageContent,
+        currentMessages: activeConversation?.messages || [],
+        model: model,
+        cocotalkContext: activeCocotalk
+          ? {
+              originId: activeCocotalk.id,
+              title: activeCocotalk.title,
+              persona: activeCocotalk.persona,
+              instructions: activeCocotalk.instructions,
             }
-        }
-        
-        if (result.newConversationId && !activeConversationId) {
-            selectConversation(result.newConversationId);
-        }
+          : null,
+      });
 
-    } catch (e: any) {
-        console.error("Erreur inattendue dans handleSendMessage:", e);
+      if (result.error) {
         toast({
-            variant: "destructive",
-            title: "Erreur",
-            description: e.message || "Une erreur est survenue. Veuillez réessayer.",
+          variant: "destructive",
+          title: "Erreur de l'IA",
+          description: result.error,
         });
+      }
+
+      // If a new chat was created, select it.
+      // The conversation list will be updated automatically by the onSnapshot listener.
+      if (result.newConversationId && !activeConversationId) {
+        selectConversation(result.newConversationId);
+      }
+    } catch (e: any) {
+      console.error("Erreur inattendue dans handleSendMessage:", e);
+      toast({
+        variant: "destructive",
+        title: "Erreur",
+        description: e.message || "Une erreur est survenue. Veuillez réessayer.",
+      });
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
-};
+  };
 
   const createNewChat = async () => {
     if (!currentUser) return;
