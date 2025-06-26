@@ -14,7 +14,7 @@ import { searchWebTool } from '@/ai/tools/web-search';
 
 // Define the schema for a single message in the conversation
 const MessageSchema = z.object({
-  role: z.enum(['user', 'model']),
+  role: z.enum(['user', 'model', 'system', 'tool']), // Allow 'system' for filtering
   content: z.string(),
 });
 
@@ -52,6 +52,10 @@ const multilingualChatFlow = ai.defineFlow(
     const { messages, persona, rules, model } = input;
     const activeModel = model || 'googleai/gemini-2.0-flash';
     
+    // **CRITICAL FIX**: Filter out any 'system' roles from the history
+    // The 'system' prompt is passed in a dedicated parameter, not in the history.
+    const filteredHistory = messages.filter(m => m.role !== 'system');
+
     const systemPrompt = `You are a powerful and flexible conversational AI assistant.
 Your behavior is defined by the following persona and rules. You MUST follow them.
 
@@ -72,7 +76,7 @@ You have access to a web search tool. Use it by calling 'searchWeb' when you nee
     let genkitResponse = await ai.generate({
       model: activeModel,
       system: systemPrompt,
-      history: messages as Message[],
+      history: filteredHistory as Message[], // Use the filtered history
       tools: [searchWebTool],
       toolChoice: 'auto', 
     });
@@ -100,7 +104,7 @@ You have access to a web search tool. Use it by calling 'searchWeb' when you nee
                 model: activeModel,
                 system: systemPrompt,
                 // The history now includes the model's request and the tool's output
-                history: [...(messages as Message[]), genkitResponse.message, ...toolOutputs], 
+                history: [...(filteredHistory as Message[]), genkitResponse.message, ...toolOutputs], // Use filtered history
                 tools: [searchWebTool],
                 toolChoice: 'auto',
             });
