@@ -108,10 +108,9 @@ const multilingualChatFlow = ai.defineFlow(
       // Step 1: Validate and clean the history
       let historyForGenkit = validateAndCleanHistory(messages);
 
-      // Critical check: if history is invalid or empty after cleaning, return an error.
+      // CRITICAL FIX: If history is invalid or empty after cleaning, throw an error.
       if (historyForGenkit.length === 0) {
-        console.error("multilingualChatFlow: History is empty or invalid after cleaning.");
-        return { error: "Invalid conversation history provided." };
+        throw new Error("Invalid conversation history provided. No valid messages to process.");
       }
 
       // Step 2: Inject system instructions for Cocotalks (if applicable)
