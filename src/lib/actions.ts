@@ -1,6 +1,6 @@
 
 "use server";
-
+     
 import { multilingualChat } from "@/ai/flows/multilingual-chat";
 import { decodeImage } from "@/ai/flows/image-decoder";
 import { summarizeDocument } from "@/ai/flows/summarize-document";
@@ -10,6 +10,7 @@ import type { Message } from "genkit";
 const mammoth = require('mammoth');
 import * as xlsx from 'xlsx';
 
+// File Processing Utilities
 async function fileToDataUri(file: File): Promise<string> {
   const buffer = await file.arrayBuffer();
   const base64 = Buffer.from(buffer).toString("base64");
@@ -49,110 +50,123 @@ async function extractTextFromFile(file: File): Promise<string> {
     }
 }
 
-/**
- * Sanitizes the conversation history to ensure it's valid for the Gemini API.
- * - Filters out invalid, system, or empty messages.
- * - Ensures roles strictly alternate between 'user' and 'model'.
- * - Maps 'assistant' role to 'model'.
- * - Ensures the conversation starts with a 'user' message.
- */
-function sanitizeHistory(history: StoredMessage[]): Message[] {
-    // 1. Filter for valid, non-empty messages and map roles.
-    const mappedMessages: Message[] = history
-        .map(msg => ({
-            role: msg.role === 'assistant' ? 'model' : msg.role,
-            content: msg.content
-        }))
-        .filter((msg): msg is Message =>
-            (msg.role === 'user' || msg.role === 'model') &&
-            typeof msg.content === 'string'
-        );
+// History Sanitization
+function sanitizeHistoryForApi(history: StoredMessage[]): Message[] {
+    const validMessages = history.filter(msg =>
+        (msg.role === 'user' || msg.role === 'model') &&
+        typeof msg.content === 'string' &&
+        msg.content.trim() !== ''
+    );
 
-    if (mappedMessages.length === 0) {
-        return [];
-    }
-    
-    // 2. Ensure roles alternate correctly.
+    if (validMessages.length === 0) return [];
+
     const alternatingHistory: Message[] = [];
-    if (mappedMessages.length > 0) {
-        // Start with the first message.
-        alternatingHistory.push(mappedMessages[0]);
-        // Iterate through the rest.
-        for (let i = 1; i < mappedMessages.length; i++) {
-            // If the role is different from the last one added, push it.
-            if (mappedMessages[i].role !== alternatingHistory[alternatingHistory.length - 1].role) {
-                alternatingHistory.push(mappedMessages[i]);
-            }
+    let lastRole = '';
+
+    for (const message of validMessages) {
+        if (message.role !== lastRole) {
+            alternatingHistory.push({
+                role: message.role,
+                content: message.content
+            });
+            lastRole = message.role;
         }
     }
 
-    // 3. Ensure the conversation starts with a 'user' message.
-    const firstUserIndex = alternatingHistory.findIndex(m => m.role === 'user');
-    if (firstUserIndex === -1) {
-        return []; // No user messages, history is invalid.
+    if (alternatingHistory.length > 0 && alternatingHistory[0].role !== 'user') {
+      const firstUserIndex = alternatingHistory.findIndex(m => m.role === 'user');
+      if (firstUserIndex !== -1) {
+        return alternatingHistory.slice(firstUserIndex);
+      }
+      return []; // No user messages, invalid history
     }
 
-    return alternatingHistory.slice(firstUserIndex);
+    return alternatingHistory;
 }
 
-export async function handleChat(
+
+async function processFileAndInjectContext(history: StoredMessage[], file: File, model: string): Promise<StoredMessage[]> {
+    let contextText = "";
+    try {
+        if (file.type.startsWith("image/")) {
+            const photoDataUri = await fileToDataUri(file);
+            const description = await decodeImage({ photoDataUri, model });
+            contextText = `Contexte de l'image jointe: ${description.description}.`;
+        } else {
+            const documentContent = await extractTextFromFile(file);
+            if (!documentContent.trim()) {
+                throw new Error(`Le fichier ${file.name} est vide ou illisible.`);
+            }
+            const summary = await summarizeDocument({ documentContent, format: "text", model });
+            contextText = `Contexte du document (${file.name}): ${summary.summary}.`;
+        }
+    } catch (error: any) {
+        console.error("Error processing file:", error);
+        throw new Error(`Erreur lors du traitement du fichier: ${error.message}`);
+    }
+
+    const lastUserMessageIndex = history.map(m => m.role).lastIndexOf('user');
+    if (lastUserMessageIndex !== -1) {
+        const newHistory = [...history];
+        const userMessage = newHistory[lastUserMessageIndex];
+        userMessage.content = `${contextText}\n\nMessage de l'utilisateur: ${userMessage.content}`.trim();
+        return newHistory;
+    }
+
+    return history;
+}
+
+// --- NEW SEPARATED SERVER ACTIONS ---
+
+export async function standardChat(
   history: StoredMessage[], 
   file: File | null,
-  cocotalkContext: StoredCocotalk | undefined,
   model: string
 ) {
-
   try {
-    // Sanitize the history provided by the client. This is the crucial step.
-    let historyForGenkit = sanitizeHistory(history);
-
-    // The user's most recent message is the last one in the history.
-    // It should have been added by the client, so it's the last item.
-    const lastUserMessage = historyForGenkit.length > 0 && historyForGenkit[historyForGenkit.length - 1].role === 'user' 
-        ? historyForGenkit[historyForGenkit.length - 1] 
-        : null;
-
-    if (!lastUserMessage) {
-        const errorMsg = "A valid user message is required to start the chat.";
-        console.error(`Error in handleChat: ${errorMsg}. Sanitized History:`, historyForGenkit);
-        return { response: '', error: errorMsg };
-    }
-
-    // Handle file context if present, adding it to the last user message.
+    let processedHistory = history;
     if (file) {
-      let contextText = "";
-      try {
-        if (file.type.startsWith("image/")) {
-          const photoDataUri = await fileToDataUri(file);
-          const description = await decodeImage({ photoDataUri, model });
-          contextText = `Contexte de l'image jointe: ${description.description}.`;
-        } else { 
-          const documentContent = await extractTextFromFile(file);
-           if (!documentContent.trim()) {
-              return { response: '', error: `Le fichier ${file.name} est vide ou illisible.` };
-          }
-          const summary = await summarizeDocument({ documentContent, format: "text", model });
-          contextText = `Contexte du document (${file.name}): ${summary.summary}.`;
-        }
-      } catch (error: any) {
-         console.error("Error processing file:", error);
-         return { response: '', error: `Erreur lors du traitement du fichier: ${error.message}` };
-      }
+      processedHistory = await processFileAndInjectContext(history, file, model);
+    }
+    
+    const historyForGenkit = sanitizeHistoryForApi(processedHistory);
 
-      // Inject context into the LAST user message.
-      lastUserMessage.content = lastUserMessage.content
-        ? `${contextText}\n\nMessage de l'utilisateur: ${lastUserMessage.content}`.trim()
-        : contextText;
-    }
-    
-    // FINAL SAFEGUARD before calling the AI
     if (historyForGenkit.length === 0) {
-      const errorMsg = "Cannot process a request with no valid messages after sanitization.";
-      console.error(`Error in handleChat: ${errorMsg}. Original history had ${history.length} items.`);
-      return { response: '', error: errorMsg };
+      throw new Error("Cannot process a request with no valid messages after sanitization.");
     }
     
-    // Call the AI flow with clean, validated data
+    const chatResult = await multilingualChat({ 
+      messages: historyForGenkit,
+      model: model,
+    });
+    
+    return { response: chatResult.response, error: null };
+
+  } catch (error: any) {
+      console.error("Error in standardChat:", error);
+      return { response: '', error: error.message || "Une erreur inconnue est survenue dans le chat." };
+  }
+}
+
+
+export async function cocotalkChat(
+  history: StoredMessage[], 
+  file: File | null,
+  cocotalkContext: StoredCocotalk,
+  model: string
+) {
+  try {
+    let processedHistory = history;
+    if (file) {
+      processedHistory = await processFileAndInjectContext(history, file, model);
+    }
+    
+    const historyForGenkit = sanitizeHistoryForApi(processedHistory);
+    
+    if (historyForGenkit.length === 0) {
+      throw new Error("Cannot process a request with no valid messages after sanitization.");
+    }
+    
     const chatResult = await multilingualChat({ 
       messages: historyForGenkit,
       persona: cocotalkContext?.persona,
@@ -163,7 +177,7 @@ export async function handleChat(
     return { response: chatResult.response, error: null };
 
   } catch (error: any) {
-      console.error("Error in handleChat:", error);
+      console.error("Error in cocotalkChat:", error);
       return { response: '', error: error.message || "Une erreur inconnue est survenue dans le chat." };
   }
 }

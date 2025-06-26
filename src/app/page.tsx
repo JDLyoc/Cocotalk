@@ -4,7 +4,7 @@
 import * as React from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ChatPanel } from "@/components/chat-panel";
-import { handleChat } from "@/lib/actions";
+import { standardChat, cocotalkChat } from "@/lib/actions";
 import { useToast } from "@/hooks/use-toast";
 import { AppHeader } from "@/components/app-header";
 import { auth, db } from "@/lib/firebase";
@@ -25,21 +25,20 @@ import {
   setDoc,
 } from "firebase/firestore";
 import type { CocotalkFormValues } from "@/components/cocotalk-form";
-import type { Message as GenkitMessage } from "genkit";
 
 // Interface for messages passed to components (with ReactNode)
 export interface DisplayMessage {
   id: string;
-  role: "user" | "assistant" | "system";
+  role: "user" | "model";
   content: React.ReactNode;
   text_content?: string;
 }
 
-// Interface for messages stored in Firestore
+// Interface for messages stored in Firestore (UNIFIED ROLE)
 export interface StoredMessage {
   id: string;
-  role: "user" | "assistant" | "system";
-  content: string; // This should always be a string
+  role: "user" | "model";
+  content: string;
   file?: {
       name: string;
       type: string;
@@ -75,7 +74,6 @@ export interface StoredCocotalk {
   createdAt: Timestamp;
   userId: string;
 }
-
 
 function AppSkeleton() {
     return (
@@ -211,99 +209,129 @@ React.useEffect(() => {
     return () => unsubscribe();
   }, [isAuthReady, toast]);
 
+// SEPARATED MESSAGE HANDLERS
+const handleNormalMessage = async (text: string, file: File | null) => {
+  const userId = auth.currentUser!.uid;
+  let convId = activeConversationId;
+  let conversationRef;
+  let currentHistory: StoredMessage[] = [];
 
+  if (convId) {
+    conversationRef = doc(db, "users", userId, "conversations", convId);
+    const currentConv = conversations.find(c => c.id === convId);
+    currentHistory = currentConv?.messages ? [...currentConv.messages] : [];
+  } else {
+    const newTitle = text.substring(0, 30).trim() + (text.length > 30 ? '...' : '') || file?.name || "Nouvelle Conversation";
+    const newConvData = {
+      title: newTitle,
+      messages: [],
+      userId: userId,
+      createdAt: serverTimestamp(),
+    };
+    conversationRef = await addDoc(collection(db, "users", userId, "conversations"), newConvData);
+    convId = conversationRef.id;
+    selectConversation(convId);
+  }
+
+  const userMessage: StoredMessage = {
+    id: Date.now().toString(),
+    role: "user",
+    content: text,
+    ...(file && { file: { name: file.name, type: file.type } }),
+  };
+  const updatedHistory = [...currentHistory, userMessage];
+  await updateDoc(conversationRef, { messages: updatedHistory });
+
+  const { response, error } = await standardChat(updatedHistory, file, model);
+  if (error) throw new Error(error);
+
+  const modelMessage: StoredMessage = {
+    id: (Date.now() + 1).toString(),
+    role: 'model',
+    content: response || '',
+  };
+  await updateDoc(conversationRef, { messages: [...updatedHistory, modelMessage] });
+};
+
+const handleCocotalkMessage = async (text: string, file: File | null) => {
+  if (!activeCocotalk) throw new Error("Aucun Cocotalk actif");
+  
+  const userId = auth.currentUser!.uid;
+  let convId = activeConversationId;
+  let conversationRef;
+  let currentHistory: StoredMessage[] = [];
+
+  if (convId) {
+    conversationRef = doc(db, "users", userId, "conversations", convId);
+    const currentConv = conversations.find(c => c.id === convId);
+    currentHistory = currentConv?.messages ? [...currentConv.messages] : [];
+  } else {
+    const newConvData = {
+      title: activeCocotalk.title,
+      messages: [],
+      userId: userId,
+      createdAt: serverTimestamp(),
+      cocotalkOriginId: activeCocotalk.id,
+    };
+    conversationRef = await addDoc(collection(db, "users", userId, "conversations"), newConvData);
+    convId = conversationRef.id;
+    selectConversation(convId);
+  }
+
+  const userMessage: StoredMessage = {
+    id: Date.now().toString(),
+    role: "user",
+    content: text,
+    ...(file && { file: { name: file.name, type: file.type } }),
+  };
+
+  const isNewCocotalkConv = currentHistory.length === 0;
+  let historyWithGreeting = [...currentHistory];
+  
+  if (isNewCocotalkConv && activeCocotalk.greetingMessage) {
+    const greetingMessage: StoredMessage = {
+      id: 'greeting-' + Date.now(),
+      role: 'model',
+      content: activeCocotalk.greetingMessage,
+    };
+    historyWithGreeting.push(greetingMessage);
+  }
+
+  const updatedHistory = [...historyWithGreeting, userMessage];
+  await updateDoc(conversationRef, { messages: updatedHistory });
+
+  const { response, error } = await cocotalkChat(updatedHistory, file, activeCocotalk, model);
+  if (error) throw new Error(error);
+
+  const modelMessage: StoredMessage = {
+    id: (Date.now() + 1).toString(),
+    role: 'model',
+    content: response || '',
+  };
+  await updateDoc(conversationRef, { messages: [...updatedHistory, modelMessage] });
+};
+
+// MAIN MESSAGE HANDLER
 const handleSendMessage = async (text: string, file: File | null) => {
     if (!auth.currentUser) {
         toast({ variant: "destructive", title: "Erreur", description: "Utilisateur non authentifié." });
         return;
     }
-    if (!text.trim() && !file) {
-        return;
-    }
+    if (!text.trim() && !file) return;
 
     setIsLoading(true);
-
     try {
-        const userId = auth.currentUser.uid;
-        let convId = activeConversationId;
-        let conversationRef;
-        let currentHistory: StoredMessage[] = [];
-
-        // Step 1: Determine the conversation and its history
-        if (convId) {
-            // Existing conversation
-            conversationRef = doc(db, "users", userId, "conversations", convId);
-            const currentConv = conversations.find(c => c.id === convId);
-            currentHistory = currentConv?.messages ? [...currentConv.messages] : [];
+        if (activeCocotalkId && activeCocotalk) {
+            await handleCocotalkMessage(text, file);
         } else {
-            // New conversation
-            const newTitle = activeCocotalk 
-                ? activeCocotalk.title 
-                : (text.substring(0, 25).trim() + (text.length > 25 ? '...' : '') || file?.name || "Nouvelle Conversation");
-            
-            const newConvData = {
-                title: newTitle,
-                messages: [], // Start with empty messages
-                userId: userId,
-                createdAt: serverTimestamp(),
-                ...(activeCocotalk && { cocotalkOriginId: activeCocotalk.id }),
-            };
-            conversationRef = await addDoc(collection(db, "users", userId, "conversations"), newConvData);
-            convId = conversationRef.id;
-            selectConversation(convId);
+            await handleNormalMessage(text, file);
         }
-
-        // Add greeting message if it's a new Cocotalk conversation
-        const isNewCocotalkConv = !activeConversationId && activeCocotalk;
-        if (isNewCocotalkConv && activeCocotalk?.greetingMessage) {
-            const greetingMessage: StoredMessage = {
-                id: 'greeting-' + Date.now(),
-                role: 'assistant',
-                content: activeCocotalk.greetingMessage,
-            };
-            currentHistory.push(greetingMessage);
-        }
-
-        // Step 2: Create user message and update Firestore
-        const userMessage: StoredMessage = {
-            id: Date.now().toString(),
-            role: "user",
-            content: text,
-            ...(file && { file: { name: file.name, type: file.type } }),
-        };
-
-        const historyForBackend = [...currentHistory, userMessage];
-
-        // Update Firestore with the new user message. `onSnapshot` will update the UI.
-        await updateDoc(conversationRef, {
-            messages: historyForBackend
-        });
-
-        // Step 3: Call the backend with the up-to-date history
-        const originCocotalk = activeCocotalk || (activeConversation?.cocotalkOriginId ? cocotalks.find(c => c.id === activeConversation.cocotalkOriginId) : undefined);
-        const { response, error } = await handleChat(historyForBackend, file, originCocotalk, model);
-
-        if (error) {
-            throw new Error(error);
-        }
-
-        // Step 4: Create assistant message and update Firestore again
-        const assistantMessage: StoredMessage = {
-            id: Date.now().toString() + 'a',
-            role: 'assistant',
-            content: response || '',
-        };
-
-        await updateDoc(conversationRef, {
-            messages: [...historyForBackend, assistantMessage]
-        });
-
     } catch (e: any) {
         console.error("Error in handleSendMessage:", e);
         toast({
             variant: "destructive",
-            title: "Error",
-            description: e.message || "An error occurred. Please try again.",
+            title: "Erreur",
+            description: e.message || "Une erreur est survenue. Veuillez réessayer.",
         });
     } finally {
         setIsLoading(false);
@@ -430,7 +458,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
             
             const { id, role, content } = msg;
 
-            if (typeof id !== 'string' || !['user', 'assistant', 'system'].includes(role)) {
+            if (typeof id !== 'string' || !['user', 'model'].includes(role)) {
                 return null;
             }
 
@@ -449,14 +477,14 @@ const handleSendMessage = async (text: string, file: File | null) => {
                         )}
                     </>
                 );
-            } else {
+            } else { // role === 'model'
                 const finalHtml = textContent.replace(/\n/g, '<br />');
                 contentNode = <p className="!my-0" dangerouslySetInnerHTML={{ __html: finalHtml }} />;
             }
             
             return {
               id: id,
-              role: role as DisplayMessage['role'],
+              role: role,
               content: contentNode,
               text_content: textContent,
             };
@@ -477,19 +505,13 @@ const handleSendMessage = async (text: string, file: File | null) => {
   } : null;
 
   const initialCocotalkMessages: DisplayMessage[] = [];
-  if (activeCocotalk?.greetingMessage) {
+  if (activeCocotalk && !activeConversationId) {
+    const greetingText = activeCocotalk.greetingMessage || "Hello! I'm your new assistant. How can I help you today?";
     initialCocotalkMessages.push({
-      id: 'greeting',
-      role: 'assistant',
-      content: <p className="!my-0">{activeCocotalk.greetingMessage}</p>,
-      text_content: activeCocotalk.greetingMessage
-    });
-  } else if(activeCocotalk) {
-     initialCocotalkMessages.push({
-      id: 'greeting-default',
-      role: 'assistant',
-      content: <p className="!my-0">Hello! I'm your new assistant. How can I help you today?</p>,
-      text_content: "Hello! I'm your new assistant. How can I help you today?"
+      id: 'greeting-ui-only',
+      role: 'model',
+      content: <p className="!my-0">{greetingText}</p>,
+      text_content: greetingText
     });
   }
 
