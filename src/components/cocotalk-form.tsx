@@ -32,27 +32,27 @@ const wordCount = (max: number) => (val: string) => val.trim().split(/\s+/).filt
 const formSchema = z.object({
   title: z
     .string()
-    .min(1, { message: 'Le titre est obligatoire.' })
-    .refine(wordCount(15), { message: 'Le titre ne doit pas dépasser 15 mots.' }),
+    .min(1, { message: 'Title is required.' })
+    .refine(wordCount(15), { message: 'Title must not exceed 15 words.' }),
   description: z
     .string()
-    .min(1, { message: 'La description est obligatoire.' })
-    .refine(wordCount(30), { message: 'La description ne doit pas dépasser 30 mots.' }),
+    .min(1, { message: 'Description is required.' })
+    .refine(wordCount(30), { message: 'Description must not exceed 30 words.' }),
   persona: z
     .string()
-    .refine(wordCount(300), { message: 'Le persona ne doit pas dépasser 300 mots.' })
+    .refine(wordCount(300), { message: 'Persona must not exceed 300 words.' })
     .optional()
     .or(z.literal('')),
   instructions: z
     .string()
-    .min(1, { message: 'Les instructions sont obligatoires.' })
-    .max(5000, { message: 'Les instructions ne doivent pas dépasser 5000 caractères.' }),
+    .min(1, { message: 'Instructions are required.' })
+    .max(5000, { message: 'Instructions must not exceed 5000 characters.' }),
   starterMessage: z
     .string()
-    .min(1, { message: "Le message d'amorce est obligatoire." }),
+    .min(1, { message: "Starter message is required." }),
   greetingMessage: z
     .string()
-    .max(500, { message: "Le message d'accueil ne doit pas dépasser 500 caractères." })
+    .max(500, { message: "Greeting message must not exceed 500 characters." })
     .optional()
     .or(z.literal('')),
 });
@@ -104,10 +104,10 @@ export function CocotalkForm({ open, onOpenChange, onSubmit, cocotalkToEdit, isL
     }
   }, [open, cocotalkToEdit, form]);
 
-  const title = cocotalkToEdit ? 'Modifier le Cocotalk' : 'Créer un nouveau Cocotalk';
+  const title = cocotalkToEdit ? 'Edit Cocotalk' : 'Create a new Cocotalk';
   const description = cocotalkToEdit
-    ? 'Modifiez les détails de votre assistant personnalisé.'
-    : 'Remplissez les champs ci-dessous pour créer votre assistant personnalisé.';
+    ? 'Modify the details of your custom assistant.'
+    : 'Fill out the fields below to create your custom assistant.';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -124,11 +124,11 @@ export function CocotalkForm({ open, onOpenChange, onSubmit, cocotalkToEdit, isL
                 name="title"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Titre</FormLabel>
+                    <FormLabel>Title</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ex: Expert en Marketing Digital" {...field} />
+                      <Input placeholder="Ex: Digital Marketing Expert" {...field} />
                     </FormControl>
-                    <FormDescription>15 mots maximum.</FormDescription>
+                    <FormDescription>Max 15 words.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -140,9 +140,9 @@ export function CocotalkForm({ open, onOpenChange, onSubmit, cocotalkToEdit, isL
                   <FormItem>
                     <FormLabel>Description</FormLabel>
                     <FormControl>
-                      <Input placeholder="Un assistant qui génère des idées de campagnes publicitaires." {...field} />
+                      <Input placeholder="An assistant that generates ad campaign ideas." {...field} />
                     </FormControl>
-                    <FormDescription>30 mots maximum.</FormDescription>
+                    <FormDescription>Max 30 words.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -152,15 +152,15 @@ export function CocotalkForm({ open, onOpenChange, onSubmit, cocotalkToEdit, isL
                 name="instructions"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Règles SEO & Rédactionnelles</FormLabel>
+                    <FormLabel>Instructions (Agent's Brain)</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder="Ex: Rédige dans un style professionnel mais accessible. Évite la sur-optimisation. Cite toujours tes sources en utilisant le format (Source: Nom de la source)."
+                        placeholder="Define the agent's entire behavior. Ex: 'Step 1: Greet the user and ask for their goal. Step 2: Based on their goal, offer options A, B, C...'"
                         className="min-h-[200px]"
                         {...field}
                       />
                     </FormControl>
-                    <FormDescription>Règles de rédaction et de style que l'agent doit suivre à chaque étape. La logique du scénario est maintenant intégrée à l'agent.</FormDescription>
+                    <FormDescription>This is the most important field. Define the entire scenario, logic, and personality of your agent here. Use clear, step-by-step instructions to guide its behavior.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -170,15 +170,15 @@ export function CocotalkForm({ open, onOpenChange, onSubmit, cocotalkToEdit, isL
                 name="persona"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Persona (Optionnel)</FormLabel>
+                    <FormLabel>Persona (Optional)</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder="Le ton doit être amical mais formel. Utilise des emojis de manière modérée..."
+                        placeholder="The tone should be friendly but formal. Use emojis moderately..."
                         className="min-h-[100px]"
                         {...field}
                       />
                     </FormControl>
-                    <FormDescription>300 mots maximum.</FormDescription>
+                    <FormDescription>Max 300 words.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -188,12 +188,12 @@ export function CocotalkForm({ open, onOpenChange, onSubmit, cocotalkToEdit, isL
                 name="greetingMessage"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Message d'accueil (Optionnel)</FormLabel>
+                    <FormLabel>Greeting Message (Optional)</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="Bonjour ! Je suis votre expert en marketing. Quelle est votre idée de campagne pour aujourd'hui ?" {...field} className="min-h-[80px]" />
+                      <Textarea placeholder="Hello! I'm your marketing expert. What's your campaign idea for today?" {...field} className="min-h-[80px]" />
                     </FormControl>
                     <FormDescription>
-                      Le premier message que l'assistant affichera. S'il est vide, un message par défaut sera utilisé.
+                      The first message the assistant will display. If empty, a default greeting will be used.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -204,12 +204,12 @@ export function CocotalkForm({ open, onOpenChange, onSubmit, cocotalkToEdit, isL
                 name="starterMessage"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Message d'amorce</FormLabel>
+                    <FormLabel>Starter Message</FormLabel>
                     <FormControl>
-                      <Input placeholder="Quelle est ton idée de campagne pour aujourd'hui ?" {...field} />
+                      <Input placeholder="What's your campaign idea for today?" {...field} />
                     </FormControl>
                     <FormDescription>
-                      Une suggestion de message pour lancer la conversation, qui apparaîtra comme un bouton.
+                      A suggested message to start the conversation, which will appear as a button.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -218,10 +218,10 @@ export function CocotalkForm({ open, onOpenChange, onSubmit, cocotalkToEdit, isL
             </div>
             <DialogFooter className="pt-4 border-t">
               <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={isLoading}>
-                Annuler
+                Cancel
               </Button>
               <Button type="submit" disabled={isLoading}>
-                {isLoading ? 'Enregistrement...' : 'Sauvegarder'}
+                {isLoading ? 'Saving...' : 'Save'}
               </Button>
             </DialogFooter>
           </form>

@@ -57,7 +57,6 @@ export async function handleChat(
   history: StoredMessage[],
   file: File | null,
   agentContext: AgentContext,
-  state: string,
 ) {
   try {
     let contextText = "";
@@ -71,19 +70,19 @@ export async function handleChat(
           contextText = `Contexte de l'image jointe: ${description.description}.`;
         } catch (error) {
           console.error("Error decoding image:", error);
-          return { response: '', nextState: state, error: "Erreur lors de l'analyse de l'image." };
+          return { response: '', error: "Erreur lors de l'analyse de l'image." };
         }
       } else { 
         try {
           const documentContent = await extractTextFromFile(file);
           if (!documentContent.trim()) {
-              return { response: '', nextState: state, error: `Le fichier ${file.name} est vide ou illisible.` };
+              return { response: '', error: `Le fichier ${file.name} est vide ou illisible.` };
           }
           const summary = await summarizeDocument({ documentContent, format: "text" });
           contextText = `Contexte du document (${file.name}): ${summary.summary}.`;
         } catch (error: any) {
           console.error("Error processing document:", error);
-          return { response: '', nextState: state, error: `Erreur lors du traitement du fichier: ${error.message}` };
+          return { response: '', error: `Erreur lors du traitement du fichier: ${error.message}` };
         }
       }
     }
@@ -104,19 +103,18 @@ export async function handleChat(
       }));
 
     if (apiMessages.length === 0) {
-        return { response: '', nextState: state, error: "Impossible d'envoyer une conversation vide." };
+        return { response: '', error: "Impossible d'envoyer une conversation vide." };
     }
 
     const response = await multilingualChat({ 
       messages: apiMessages,
       persona: agentContext?.persona,
       rules: agentContext?.rules,
-      state: state as any, // Cast because the enum is defined in the flow
     });
 
     return { ...response, error: null };
   } catch (error: any) {
       console.error("Error in handleChat:", error);
-      return { response: '', nextState: state, error: error.message || "Une erreur inconnue est survenue dans le chat." };
+      return { response: '', error: error.message || "Une erreur inconnue est survenue dans le chat." };
   }
 }
