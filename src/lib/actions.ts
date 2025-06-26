@@ -60,7 +60,7 @@ export async function handleChat(
 ) {
   try {
     let contextText = "";
-    const conversationHistory = [...history]; // Create a mutable copy
+    const conversationHistory = (history || []).filter(Boolean);
 
     if (file) {
       if (file.type.startsWith("image/")) {
@@ -91,7 +91,7 @@ export async function handleChat(
     if (contextText) {
       const lastMessage = conversationHistory[conversationHistory.length - 1];
       if (lastMessage && lastMessage.role === 'user') {
-          lastMessage.content = `${contextText}\n\nMessage de l'utilisateur: ${lastMessage.content}`;
+          lastMessage.content = `${contextText}\n\nMessage de l'utilisateur: ${lastMessage.content || ''}`;
       }
     }
     

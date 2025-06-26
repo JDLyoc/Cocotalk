@@ -248,8 +248,8 @@ const handleSendMessage = async (text: string, file: File | null) => {
 
       const convRef = doc(db, "users", userId, "conversations", currentChatId!);
       
-      const currentStoredConversation = conversations.find(c => c.id === currentChatId) || { messages: [] };
-      let messagesToStore: StoredMessage[] = [...(currentStoredConversation.messages || [])];
+      const currentStoredConversation = conversations.find(c => c.id === currentChatId);
+      let messagesToStore: StoredMessage[] = [...(currentStoredConversation?.messages || [])];
 
       // Handle greeting message for new cocotalk chats
       if(activeCocotalk && messagesToStore.length === 0 && activeCocotalk.greetingMessage) {
@@ -411,7 +411,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
   }
 
   const toDisplayMessages = (messages: StoredMessage[]): DisplayMessage[] => {
-    return messages.map(msg => {
+    return (messages || []).filter(Boolean).map(msg => {
       let contentNode: React.ReactNode;
       if (msg.role === 'user') {
           contentNode = (
@@ -425,13 +425,13 @@ const handleSendMessage = async (text: string, file: File | null) => {
               </>
           );
       } else {
-          contentNode = <p className="!my-0" dangerouslySetInnerHTML={{ __html: msg.content.replace(/\n/g, '<br />') }} />;
+          contentNode = <p className="!my-0" dangerouslySetInnerHTML={{ __html: (msg.content || '').replace(/\n/g, '<br />') }} />;
       }
       return {
         id: msg.id,
         role: msg.role,
         content: contentNode,
-        text_content: msg.content,
+        text_content: msg.content || '',
       };
     });
   };
