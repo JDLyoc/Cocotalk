@@ -8,17 +8,24 @@ import { Dashboard } from "./dashboard";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import Image from "next/image";
 import * as React from "react";
-import { db } from "@/lib/firebase";
-import { doc, onSnapshot } from "firebase/firestore";
+import { db, auth } from "@/lib/firebase";
+import { onSnapshot, doc } from "firebase/firestore";
+import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 import { Skeleton } from "./ui/skeleton";
 
 export function AppHeader() {
-  const userEmail = "contentredac@gmail.com";
+  const [currentUser, setCurrentUser] = React.useState<FirebaseUser | null>(null);
   const [logoUrl, setLogoUrl] = React.useState<string | null>(null);
   const [isLoadingLogo, setIsLoadingLogo] = React.useState(true);
+  const [isAuthLoading, setIsAuthLoading] = React.useState(true);
 
   React.useEffect(() => {
-    const unsub = onSnapshot(doc(db, "settings", "logo"), (doc) => {
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      setIsAuthLoading(false);
+    });
+
+    const unsubLogo = onSnapshot(doc(db, "settings", "logo"), (doc) => {
       if (doc.exists()) {
         setLogoUrl(doc.data().url);
       } else {
@@ -30,14 +37,18 @@ export function AppHeader() {
         setIsLoadingLogo(false);
     });
 
-    return () => unsub();
+    return () => {
+      unsubAuth();
+      unsubLogo();
+    };
   }, []);
 
-  const getInitials = (email: string) => {
+  const getInitials = (email: string | null | undefined) => {
+      if (!email) return 'U';
       const namePart = email.split('@')[0];
       return namePart.substring(0, 2).toUpperCase();
   };
-  const initials = getInitials(userEmail);
+  const initials = getInitials(currentUser?.email);
 
   const defaultLogoDataUri = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAEgAmADASIAAhEBAxEB/8QAGwABAQEBAQEBAQAAAAAAAAAAAAECAwQFBgf/xAA1EAEAAQMDAgQFAwQCAgIDAAAAAQIDEQQhEjFBUQUTImFxMoGRoQYUscHR8BVS4SNicuHxkv/EABcBAQEBAQAAAAAAAAAAAAAAAAABAgP/xAAgEQEBAAIDAQEAAwEAAAAAAAAAAQIRAxIhEzFBBCJR/9oADAMBAAIRAxEAPwD9xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAe0aRpGv3h4l5JmZ7QzCgIgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAgCAIAg-";
 
@@ -83,7 +94,7 @@ export function AppHeader() {
             <DialogTrigger asChild>
                 <Button variant="ghost" className="relative h-10 w-10 rounded-full">
                     <Avatar className="h-10 w-10 border">
-                        <AvatarFallback className="bg-accent text-accent-foreground">{initials}</AvatarFallback>
+                        <AvatarFallback className="bg-accent text-accent-foreground">{isAuthLoading ? '...' : initials}</AvatarFallback>
                     </Avatar>
                 </Button>
             </DialogTrigger>
@@ -94,7 +105,7 @@ export function AppHeader() {
                 <div className="p-6">
                     <div className="flex items-center gap-4">
                         <span className="text-sm font-medium text-muted-foreground">Email:</span>
-                        <span className="text-sm font-semibold">{userEmail}</span>
+                        <span className="text-sm font-semibold">{currentUser?.email || 'Chargement...'}</span>
                     </div>
                 </div>
             </DialogContent>

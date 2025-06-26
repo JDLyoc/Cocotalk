@@ -2,13 +2,14 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from 'next/navigation';
 import { AppSidebar } from "@/components/app-sidebar";
 import { ChatPanel } from "@/components/chat-panel";
 import { invokeAiChat } from "@/lib/actions";
 import { useToast } from "@/hooks/use-toast";
 import { AppHeader } from "@/components/app-header";
 import { auth, db } from "@/lib/firebase";
-import { signInAnonymously, onAuthStateChanged, User } from "firebase/auth";
+import { onAuthStateChanged, User } from "firebase/auth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useModel } from "@/contexts/model-context";
 import {
@@ -71,6 +72,7 @@ function AppSkeleton() {
 export default function Home() {
   const { toast } = useToast();
   const { model } = useModel();
+  const router = useRouter();
   
   const [conversations, setConversations] = React.useState<StoredConversation[]>([]);
   const [activeConversationId, setActiveConversationId] = React.useState<string | null>(null);
@@ -85,40 +87,25 @@ export default function Home() {
   const activeConversation = conversations.find(c => c.id === activeConversationId);
   const activeCocotalk = cocotalks.find(c => c.id === activeCocotalkId);
   
-  // Effect 1: Listen for auth state changes
+  // Effect 1: Handle auth state changes and redirection
   React.useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         // User is signed in.
         const userDocRef = doc(db, "users", user.uid);
-        // Using set with merge is safe for both creation and updates.
         await setDoc(userDocRef, { lastLogin: serverTimestamp() }, { merge: true });
         setCurrentUser(user);
       } else {
-        // User is signed out.
+        // User is signed out, redirect to login.
         setCurrentUser(null);
+        router.push('/login');
       }
       setIsAuthReady(true);
     });
     return () => unsubscribe();
-  }, []);
+  }, [router]);
 
-  // Effect 2: If auth is ready but there's no user, sign in anonymously.
-  // This separates the sign-in action from the listener, preventing race conditions.
-  React.useEffect(() => {
-    if (isAuthReady && !currentUser) {
-      signInAnonymously(auth).catch(error => {
-        console.error("Anonymous sign-in failed:", error);
-        toast({
-          variant: "destructive",
-          title: "Authentication Error",
-          description: "Could not connect to the backend. Please refresh the page.",
-        });
-      });
-    }
-  }, [isAuthReady, currentUser, toast]);
-
-  // Effect 3: Fetch conversations when user is authenticated.
+  // Effect 2: Fetch conversations when user is authenticated.
   React.useEffect(() => {
     if (!currentUser) return;
 
@@ -148,7 +135,7 @@ export default function Home() {
     return () => unsubscribe();
   }, [currentUser, toast]);
 
-  // Effect 4: Set the initial active conversation after data has loaded.
+  // Effect 3: Set the initial active conversation after data has loaded.
   React.useEffect(() => {
     if (!isDataLoading && conversations.length > 0 && !activeConversationId && !activeCocotalkId) {
         setActiveConversationId(conversations[0].id);
@@ -156,7 +143,7 @@ export default function Home() {
   }, [isDataLoading, conversations, activeConversationId, activeCocotalkId]);
 
 
-  // Effect 5: Fetch cocotalks when user is authenticated.
+  // Effect 4: Fetch cocotalks when user is authenticated.
   React.useEffect(() => {
     if (!currentUser) return;
     
@@ -201,15 +188,16 @@ export default function Home() {
         role: 'user',
         content: messageContent,
     };
-
-    const history = activeConversation ? activeConversation.messages : [];
+    
+    const currentConversationId = activeConversationId;
 
     try {
       const aiResult = await invokeAiChat({
-          conversationHistory: history,
+          conversationId: currentConversationId,
           messageContent: messageContent,
           model: model,
           activeCocotalk: activeCocotalk || null,
+          userId: currentUser.uid,
       });
 
       if (aiResult.error || !aiResult.response) {
@@ -228,8 +216,8 @@ export default function Home() {
           content: aiResult.response,
       };
 
-      if (activeConversationId) {
-        const convRef = doc(db, "users", currentUser.uid, "conversations", activeConversationId);
+      if (currentConversationId) {
+        const convRef = doc(db, "users", currentUser.uid, "conversations", currentConversationId);
         await updateDoc(convRef, {
             messages: arrayUnion(userMessageForDb, modelMessageForDb)
         });
@@ -363,7 +351,8 @@ export default function Home() {
       setActiveCocotalkId(id);
   }
 
-  if (!isAuthReady || isDataLoading) {
+  // Show skeleton while auth state is being determined or data is loading.
+  if (!isAuthReady || !currentUser || (conversations.length === 0 && isDataLoading)) {
     return <AppSkeleton />;
   }
 

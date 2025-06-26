@@ -2,10 +2,13 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
+import { signOut } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 import { LogOut, MessageSquare, Sparkles, MoreHorizontal, Edit, Trash2, Cog } from "lucide-react";
 import { Button, buttonVariants } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
-import type { DisplayConversation, StoredCocotalk } from "@/app/page";
+import type { DisplayConversation, StoredCocotalk } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -65,11 +68,17 @@ export function AppSidebar({
   updateCocotalk,
   deleteCocotalk,
 }: AppSidebarProps) {
+  const router = useRouter();
   const [renameTarget, setRenameTarget] = React.useState<DisplayConversation | null>(null);
   const [newTitle, setNewTitle] = React.useState("");
   const [isCocotalkFormOpen, setIsCocotalkFormOpen] = React.useState(false);
   const [cocotalkToEdit, setCocotalkToEdit] = React.useState<StoredCocotalk | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+  const handleLogout = async () => {
+    await signOut(auth);
+    router.push('/login');
+  };
 
   const handleRenameClick = (conv: DisplayConversation) => {
     setRenameTarget(conv);
@@ -256,7 +265,7 @@ export function AppSidebar({
             </div>
         </div>
         <div className="mt-auto border-t -mx-4 p-4 bg-[#2A4D8F]">
-          <Button variant="ghost" className="w-full justify-start rounded-lg text-white hover:bg-white/20 hover:text-white" onClick={() => alert("Fonction de déconnexion à implémenter")}>
+          <Button variant="ghost" className="w-full justify-start rounded-lg text-white hover:bg-white/20 hover:text-white" onClick={handleLogout}>
               <LogOut className="mr-3 h-5 w-5" />
               <span className="font-medium">Se déconnecter</span>
           </Button>
