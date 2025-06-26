@@ -4,20 +4,15 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Allow public read for settings like the logo, but only authenticated users can write.
-    match /settings/{settingId} {
-      allow read: if true;
-      allow write: if request.auth != null;
+    // Allow users to read and write only their own data (conversations, etc.)
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Users can only read and write their own documents.
-    match /users/{userId} {
-      allow read, write, delete: if request.auth != null && request.auth.uid == userId;
-
-      // This allows users to manage their own subcollections.
-      match /{subcollection}/{docId} {
-        allow read, write, delete: if request.auth != null && request.auth.uid == userId;
-      }
+    // Allow any authenticated user to read and write app settings like the logo.
+    // For a production app, this should be restricted to admin roles.
+    match /settings/{docId} {
+      allow read, write: if request.auth != null;
     }
   }
 }
