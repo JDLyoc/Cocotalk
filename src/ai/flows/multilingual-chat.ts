@@ -48,12 +48,21 @@ const multilingualChatPrompt = ai.definePrompt({
   output: { schema: MultilingualChatOutputSchema },
   tools: [searchWebTool],
   system: `{{#if customInstructions}}
-{{{customInstructions}}}
-{{#if persona}}
+You are a helpful assistant. You must follow the user-provided instructions and persona.
+Analyze the entire conversation history to understand the current step of the process. Do not repeat a step if it has already been completed.
 
-Persona context:
+Instructions to follow:
+---
+{{{customInstructions}}}
+---
+
+{{#if persona}}
+Persona to adopt:
+---
 {{{persona}}}
+---
 {{/if}}
+
 {{else}}
 You are a multilingual chatbot that can understand and respond in any language.
 The user will send you a message, and you must respond in the same language as the message.
