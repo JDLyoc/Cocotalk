@@ -429,27 +429,28 @@ const handleSendMessage = async (text: string, file: File | null) => {
   }
 
   const toDisplayMessages = (messages: StoredMessage[]): DisplayMessage[] => {
+    // 1. Defend against non-array input from Firestore
     if (!Array.isArray(messages)) {
-        return []; // Defend against non-array input from Firestore
+        return [];
     }
 
     return messages
+        // 2. Aggressive filtering: ensure message is a valid object with required fields
         .filter((m): m is StoredMessage => {
-            // Aggressive validation: must be an object with a string id and a valid role.
-            // We will handle potentially null/undefined content inside the map.
             return m &&
                    typeof m === 'object' &&
                    typeof m.id === 'string' &&
                    (m.role === 'user' || m.role === 'assistant' || m.role === 'system');
         })
         .map(msg => {
-            const textContent = msg.content; // Can be string, null, or undefined from Firestore
+            // 3. Explicitly handle the text content, defaulting to an empty string if null/undefined
+            const textContent = (typeof msg.content === 'string') ? msg.content : '';
             let contentNode: React.ReactNode;
 
             if (msg.role === 'user') {
                 contentNode = (
                     <>
-                        {textContent && typeof textContent === 'string' && <p className="!my-0">{textContent}</p>}
+                        <p className="!my-0">{textContent}</p>
                         {msg.file && (
                             <div className="mt-2 p-2 border rounded-lg bg-muted text-muted-foreground text-sm">
                                 Fichier joint: {msg.file.name}
@@ -458,8 +459,8 @@ const handleSendMessage = async (text: string, file: File | null) => {
                     </>
                 );
             } else {
-                // Defensive coding: Ensure textContent is a string before calling .replace()
-                const finalHtml = typeof textContent === 'string' ? textContent.replace(/\n/g, '<br />') : '';
+                // 4. The replace operation is now only ever called on a guaranteed string
+                const finalHtml = textContent.replace(/\n/g, '<br />');
                 contentNode = <p className="!my-0" dangerouslySetInnerHTML={{ __html: finalHtml }} />;
             }
             
@@ -467,7 +468,7 @@ const handleSendMessage = async (text: string, file: File | null) => {
               id: msg.id,
               role: msg.role,
               content: contentNode,
-              text_content: typeof textContent === 'string' ? textContent : '',
+              text_content: textContent, // This is also guaranteed to be a string
             };
         });
     };
