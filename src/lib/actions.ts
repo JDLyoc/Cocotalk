@@ -105,12 +105,8 @@ export async function handleChat(
       return { error: "Impossible d'envoyer une conversation vide." };
   }
 
-  const lastMessage = apiMessages.pop()!;
-  const apiHistory = apiMessages;
-
   const response = await multilingualChat({ 
-    history: apiHistory,
-    lastMessage: lastMessage,
+    messages: apiMessages,
     persona: customContext?.persona,
     customInstructions: customContext?.instructions
   });

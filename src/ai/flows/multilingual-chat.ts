@@ -20,8 +20,7 @@ const MessageSchema = z.object({
 });
 
 const MultilingualChatInputSchema = z.object({
-  history: z.array(MessageSchema).describe('The conversation history, excluding the last message.'),
-  lastMessage: MessageSchema.describe('The last message from the user to be processed.'),
+  messages: z.array(MessageSchema).describe('The entire conversation history, including the last message.'),
   persona: z.string().optional().describe('The persona the assistant should adopt.'),
   customInstructions: z.string().optional().describe('Custom instructions for the assistant.'),
 });
@@ -36,15 +35,12 @@ export async function multilingualChat(input: MultilingualChatInput): Promise<Mu
   return multilingualChatFlow(input);
 }
 
-const PromptInputSchema = z.object({
-  lastMessage: MessageSchema,
-  persona: z.string().optional(),
-  customInstructions: z.string().optional(),
-});
-
 const multilingualChatPrompt = ai.definePrompt({
   name: 'multilingualChatPrompt',
-  input: { schema: PromptInputSchema },
+  input: { schema: z.object({
+      persona: z.string().optional(),
+      customInstructions: z.string().optional(),
+  }) },
   output: { schema: MultilingualChatOutputSchema },
   tools: [searchWebTool],
   system: `{{#if customInstructions}}
@@ -67,7 +63,7 @@ Persona to adopt:
 You are a multilingual chatbot that can understand and respond in any language.
 The user will send you a message, and you must respond in the same language as the message.
 {{/if}}`,
-  prompt: `{{{lastMessage.content}}}`,
+  prompt: ``,
 });
 
 const multilingualChatFlow = ai.defineFlow(
@@ -78,13 +74,12 @@ const multilingualChatFlow = ai.defineFlow(
   },
   async (input) => {
     const history: Message[] =
-      input.history?.map((h) => ({
+      input.messages?.map((h) => ({
         role: h.role,
         content: [{text: h.content}],
       })) || [];
 
     const promptInput = {
-        lastMessage: input.lastMessage,
         persona: input.persona,
         customInstructions: input.customInstructions
     };
