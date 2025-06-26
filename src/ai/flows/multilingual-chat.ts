@@ -31,38 +31,6 @@ const MultilingualChatOutputSchema = z.object({
 export type MultilingualChatOutput = z.infer<typeof MultilingualChatOutputSchema>;
 
 
-/**
- * A simple and robust history validation function.
- * It ensures the history is an array of valid messages and starts with a 'user' role.
- * This prevents the 'at least one message is required' error for new conversations.
- */
-function validateAndCleanHistory(messages: Message[] | undefined | null): Message[] {
-    if (!Array.isArray(messages) || messages.length === 0) {
-        return [];
-    }
-
-    // Filter for valid, non-empty messages
-    const validMessages = messages.filter(
-        (msg) => msg && msg.role && typeof msg.content === 'string' && msg.content.trim().length > 0
-    );
-
-    if (validMessages.length === 0) {
-        return [];
-    }
-    
-    // The history must start with a user message for the API.
-    if (validMessages[0].role !== 'user') {
-        const firstUserIndex = validMessages.findIndex(m => m.role === 'user');
-        if (firstUserIndex === -1) {
-            return []; // No user messages at all.
-        }
-        return validMessages.slice(firstUserIndex);
-    }
-
-    return validMessages;
-}
-
-
 function createSystemPrompt(persona?: string, rules?: string): string {
   const defaultPersona = 'You are a helpful, knowledgeable, and friendly AI assistant.';
   const defaultRules = 'Provide helpful, accurate, and contextually appropriate responses. Always respond in the same language as the user\'s message.';
@@ -95,22 +63,20 @@ const multilingualChatFlow = ai.defineFlow(
       const { messages, persona, rules, model } = input;
       const activeModel = model || 'googleai/gemini-2.0-flash';
       
-      // Step 1: Validate and clean the history using the new robust function.
-      let historyForGenkit = validateAndCleanHistory(messages);
+      // Following your suggestion, we removed the complex validation.
+      // We trust the history provided by the calling action.
+      const historyForGenkit: Message[] = [...messages];
 
-      // CRITICAL: If history is invalid or empty after cleaning, stop immediately.
-      if (historyForGenkit.length === 0) {
-        const errorMessage = "No valid messages to send. Please check your input.";
-        console.error(errorMessage, "Original message count:", messages?.length);
-        return { error: errorMessage };
-      }
-
-      // Step 2: Inject system instructions if applicable
+      // Inject system instructions if they exist.
       if (persona || rules) {
         const systemPrompt = createSystemPrompt(persona, rules);
-        const firstUserMessage = historyForGenkit[0];
-        // Prepend the system prompt to the first user message.
-        firstUserMessage.content = `${systemPrompt}\n\n---\n\nUser Request:\n${firstUserMessage.content}`;
+        const firstMessage = historyForGenkit[0];
+        
+        // The calling 'actions.ts' file guarantees the history is never empty.
+        // We prepend the instructions to the first message for the AI.
+        if(firstMessage) {
+            firstMessage.content = `${systemPrompt}\n\n---\n\nUser Request:\n${firstMessage.content}`;
+        }
       }
 
       // Step 3: Call the AI with the prepared history
