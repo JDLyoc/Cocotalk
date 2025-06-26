@@ -30,53 +30,36 @@ const MultilingualChatOutputSchema = z.object({
 });
 export type MultilingualChatOutput = z.infer<typeof MultilingualChatOutputSchema>;
 
+
 /**
- * Validates and cleans the message history to ensure it's in a valid format for the Genkit API.
- * This function is critical for stability. It ensures:
- * 1. Only valid messages with content are kept.
- * 2. The history starts with a 'user' message.
- * 3. Roles alternate correctly (no two consecutive 'user' or 'model' roles).
+ * A simple and robust history validation function.
+ * It ensures the history is an array of valid messages and starts with a 'user' role.
+ * This prevents the 'at least one message is required' error for new conversations.
  */
-function validateAndCleanHistory(messages: Message[]): Message[] {
-  if (!messages || messages.length === 0) {
-    return [];
-  }
-
-  // 1. Filter out any messages that are fundamentally invalid (no role/content)
-  const validFormatMessages = messages.filter(
-    (msg) =>
-      msg &&
-      msg.role &&
-      ['user', 'model', 'tool'].includes(msg.role) &&
-      typeof msg.content === 'string' &&
-      msg.content.trim().length > 0
-  );
-
-  if (validFormatMessages.length === 0) {
-    return [];
-  }
-  
-  // 2. Ensure we start with a user message if possible
-  const firstUserIndex = validFormatMessages.findIndex((msg) => msg.role === 'user');
-  if (firstUserIndex === -1) {
-    return []; // No user message, invalid history
-  }
-  const historyStartingWithUser = validFormatMessages.slice(firstUserIndex);
-
-
-  // 3. Remove consecutive duplicate roles (e.g., user, user -> user)
-  const cleanedHistory: Message[] = [];
-  historyStartingWithUser.forEach((message) => {
-    if (cleanedHistory.length === 0 || cleanedHistory[cleanedHistory.length - 1].role !== message.role) {
-      cleanedHistory.push(message);
-    } else {
-        // If the role is the same, overwrite the last message with the new one.
-        // This handles cases where UI state might have caused duplicates.
-        cleanedHistory[cleanedHistory.length - 1] = message;
+function validateAndCleanHistory(messages: Message[] | undefined | null): Message[] {
+    if (!Array.isArray(messages) || messages.length === 0) {
+        return [];
     }
-  });
 
-  return cleanedHistory;
+    // Filter for valid, non-empty messages
+    const validMessages = messages.filter(
+        (msg) => msg && msg.role && typeof msg.content === 'string' && msg.content.trim().length > 0
+    );
+
+    if (validMessages.length === 0) {
+        return [];
+    }
+    
+    // The history must start with a user message for the API.
+    if (validMessages[0].role !== 'user') {
+        const firstUserIndex = validMessages.findIndex(m => m.role === 'user');
+        if (firstUserIndex === -1) {
+            return []; // No user messages at all.
+        }
+        return validMessages.slice(firstUserIndex);
+    }
+
+    return validMessages;
 }
 
 
@@ -112,16 +95,17 @@ const multilingualChatFlow = ai.defineFlow(
       const { messages, persona, rules, model } = input;
       const activeModel = model || 'googleai/gemini-2.0-flash';
       
-      // Step 1: Validate and clean the history. This is the crucial step.
-      let historyForGenkit = validateAndCleanHistory(messages || []);
+      // Step 1: Validate and clean the history using the new robust function.
+      let historyForGenkit = validateAndCleanHistory(messages);
 
-      // CRITICAL FIX: If history is invalid or empty after cleaning, stop immediately.
+      // CRITICAL: If history is invalid or empty after cleaning, stop immediately.
       if (historyForGenkit.length === 0) {
-        console.error("No valid messages found after cleaning. Original message count:", messages?.length);
-        return { error: "Aucun message valide à envoyer. Veuillez vérifier votre saisie." };
+        const errorMessage = "No valid messages to send. Please check your input.";
+        console.error(errorMessage, "Original message count:", messages?.length);
+        return { error: errorMessage };
       }
 
-      // Step 2: Inject system instructions for Cocotalks (if applicable)
+      // Step 2: Inject system instructions if applicable
       if (persona || rules) {
         const systemPrompt = createSystemPrompt(persona, rules);
         const firstUserMessage = historyForGenkit[0];
