@@ -1,25 +1,20 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Allow reads to the global logo settings for everyone
+    // Allow reads to the global logo settings for everyone,
+    // and writes for authenticated users.
     match /settings/logo {
       allow read: if true;
-      // Allow authenticated users to upload a new logo
       allow write: if request.auth != null;
     }
 
-    // Allow users to read and write their own user document. This is the key fix.
-    // It permits both creation and updates (like 'lastLogin').
-    match /users/{userId} {
+    // Allow a user to read and write to any document within their own
+    // user data tree. This single rule covers creating their user document,
+    // updating it, and managing all sub-collections like conversations.
+    match /users/{userId}/{documents=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-    
-    // Allow users to read, write, and delete documents in their own sub-collections (e.g., conversations)
-    match /users/{userId}/{document=**} {
-      allow read, write, delete: if request.auth != null && request.auth.uid == userId;
     }
   }
 }
