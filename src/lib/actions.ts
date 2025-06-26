@@ -45,7 +45,11 @@ async function extractTextFromFile(file: File): Promise<string> {
     }
 }
 
-async function processFileAndInjectContext(
+/**
+ * Injects file context into the last user message of the history.
+ * If the history is empty, it creates a new user message with the context.
+ */
+async function processAndInjectFileContext(
     history: Message[],
     file: File,
     model: string
@@ -69,51 +73,57 @@ async function processFileAndInjectContext(
         throw new Error(`Erreur lors du traitement du fichier: ${error.message}`);
     }
 
-    const lastUserMessageIndex = history.map(m => m.role).lastIndexOf('user');
+    const newHistory = [...history];
+    const lastUserMessageIndex = newHistory.map(m => m.role).lastIndexOf('user');
+
     if (lastUserMessageIndex !== -1) {
-        const newHistory = [...history];
+        // Append context to the last user message
         const userMessage = newHistory[lastUserMessageIndex];
         userMessage.content = `${contextText}\n\nMessage de l'utilisateur: ${userMessage.content}`.trim();
-        return newHistory;
+    } else {
+        // If no user message exists (e.g., file sent with no text), create one
+        newHistory.push({
+            role: 'user',
+            content: contextText,
+        });
     }
     
-    // Fallback if no user message exists (e.g., file sent with no text)
-    const contextMessage: Message = {
-        role: 'user',
-        content: contextText,
-    };
-    return [...history, contextMessage];
+    return newHistory;
 }
+
 
 // ===== CORE CHAT LOGIC =====
 
-interface StandardChatInput {
+interface BaseChatInput {
   messages: Message[];
   model: string;
   file?: File | null;
 }
 
-interface CocotalkChatInput extends StandardChatInput {
+interface CocotalkChatInput extends BaseChatInput {
   persona?: string;
   rules: string;
 }
 
 /**
  * Central function to handle all chat requests.
- * It processes files and calls the appropriate AI flow.
+ * It processes files and calls the AI flow.
  */
 async function handleChat(
     history: Message[],
     file: File | null,
-    cocotalkContext: Pick<StoredCocotalk, 'persona' | 'instructions'> | undefined,
-    model: string
-) {
+    model: string,
+    cocotalkContext?: Pick<StoredCocotalk, 'persona' | 'instructions'>
+): Promise<{ response: string | null; error: string | null }> {
     try {
         let processedHistory = history;
+
+        // Step 1: Inject file context if a file is provided
         if (file) {
-            processedHistory = await processFileAndInjectContext(history, file, model);
+            processedHistory = await processAndInjectFileContext(history, file, model);
         }
-        
+
+        // Step 2: Call the Genkit flow with the processed history
         const chatResult = await multilingualChat({
             messages: processedHistory,
             persona: cocotalkContext?.persona,
@@ -121,6 +131,7 @@ async function handleChat(
             model: model,
         });
 
+        // Step 3: Handle the response from the flow
         if (chatResult.error) {
             return { response: null, error: chatResult.error };
         }
@@ -133,24 +144,23 @@ async function handleChat(
     }
 }
 
+
 // ===== EXPORTED SERVER ACTIONS (WRAPPERS) =====
 
 /**
  * Handles a standard chat conversation.
- * This is a wrapper for the core chat handler.
  */
-export async function standardChat(input: StandardChatInput): Promise<{ response: string | null; error: string | null }> {
-  return handleChat(input.messages, input.file || null, undefined, input.model);
+export async function standardChat(input: BaseChatInput): Promise<{ response: string | null; error: string | null }> {
+  return handleChat(input.messages, input.file || null, input.model);
 }
 
 /**
  * Handles a conversation with a custom assistant (Cocotalk).
- * This is a wrapper for the core chat handler.
  */
 export async function cocotalkChat(input: CocotalkChatInput): Promise<{ response: string | null; error: string | null }> {
   const cocotalkContext = {
     persona: input.persona,
     instructions: input.rules,
   };
-  return handleChat(input.messages, input.file || null, cocotalkContext, input.model);
+  return handleChat(input.messages, input.file || null, input.model, cocotalkContext);
 }

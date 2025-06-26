@@ -12,13 +12,12 @@ import { z } from 'genkit';
 import type { Message } from 'genkit';
 import { searchWebTool } from '@/ai/tools/web-search';
 
-// Input uses 'user' and 'model' roles, which is what Genkit expects.
+// Use Genkit's expected roles
 const MessageSchema = z.object({
   role: z.enum(['user', 'model', 'tool']),
   content: z.string(),
 });
 
-// The input for the generic chat flow.
 const MultilingualChatInputSchema = z.object({
   messages: z.array(MessageSchema).describe('The entire conversation history, from oldest to newest.'),
   persona: z.string().optional().describe('The persona the assistant should adopt.'),
@@ -27,18 +26,53 @@ const MultilingualChatInputSchema = z.object({
 });
 export type MultilingualChatInput = z.infer<typeof MultilingualChatInputSchema>;
 
-// The output is just the agent's response.
 const MultilingualChatOutputSchema = z.object({
-  response: z.string().describe('The chatbot response in the same language as the user message.'),
+  response: z.string().optional().describe('The chatbot response in the same language as the user message.'),
+  error: z.string().optional().describe('An error message if the process failed.'),
 });
 export type MultilingualChatOutput = z.infer<typeof MultilingualChatOutputSchema>;
 
+
 /**
- * Creates a system prompt based on persona and rules
- * @param persona - The persona to adopt
- * @param rules - The rules and scenario to follow
- * @returns Formatted system prompt
+ * Validates and cleans the message history to ensure it's in a valid format for the Genkit API.
+ * 1. Filters out invalid or empty messages.
+ * 2. Ensures roles alternate (e.g., user, model, user...).
+ * 3. Guarantees the history starts with a 'user' message.
  */
+function validateAndCleanHistory(messages: Message[]): Message[] {
+  // 1. Filter out invalid messages
+  const validMessages = messages.filter(msg =>
+    msg &&
+    typeof msg === 'object' &&
+    msg.role && ['user', 'model', 'tool'].includes(msg.role) &&
+    typeof msg.content === 'string' && msg.content.trim().length > 0
+  );
+
+  if (validMessages.length === 0) {
+    return [];
+  }
+
+  // 2. Ensure alternating roles and no duplicates
+  const cleanedHistory: Message[] = [];
+  let lastRole: string | null = null;
+  for (const message of validMessages) {
+    if (message.role === lastRole && message.role !== 'tool') {
+      continue; // Skip consecutive messages with the same role
+    }
+    cleanedHistory.push(message);
+    lastRole = message.role;
+  }
+
+  // 3. Ensure we start with a user message
+  const firstUserIndex = cleanedHistory.findIndex(msg => msg.role === 'user');
+  if (firstUserIndex === -1) {
+    return []; // No user message found
+  }
+
+  return cleanedHistory.slice(firstUserIndex);
+}
+
+
 function createSystemPrompt(persona?: string, rules?: string): string {
   const defaultPersona = 'You are a helpful, knowledgeable, and friendly AI assistant.';
   const defaultRules = 'Provide helpful, accurate, and contextually appropriate responses. Always respond in the same language as the user\'s message.';
@@ -51,29 +85,15 @@ ${persona || defaultPersona}
 
 ## Rules & Scenario
 ${rules || defaultRules}
-
-## Important Guidelines
-- Always respond in the same language as the user's last message
-- Maintain consistency with your defined persona throughout the conversation
-- If you need recent information or facts, use the web search tool
-- Be helpful, accurate, and contextually aware
-- Follow the conversation flow naturally
-
-## Available Tools
-You have access to a web search tool. Use it by calling 'searchWeb' when you need:
-- Recent information or current events
-- Up-to-date facts or data
-- News or trending topics
-- Information that might have changed recently
 `;
 }
 
-// The exported function that the application will call.
+
 export async function multilingualChat(input: MultilingualChatInput): Promise<MultilingualChatOutput> {
   return multilingualChatFlow(input);
 }
 
-// The main flow with improved error handling and validation
+
 const multilingualChatFlow = ai.defineFlow(
   {
     name: 'multilingualChatFlow',
@@ -85,117 +105,61 @@ const multilingualChatFlow = ai.defineFlow(
       const { messages, persona, rules, model } = input;
       const activeModel = model || 'googleai/gemini-2.0-flash';
       
-      // History is assumed to be pre-sanitized by actions.ts
-      let historyForGenkit = messages as Message[];
+      // Step 1: Validate and clean the history
+      let historyForGenkit = validateAndCleanHistory(messages);
 
-      // Inject system instructions for Cocotalks (custom assistants)
+      // Critical check: if history is invalid or empty after cleaning, return an error.
+      if (historyForGenkit.length === 0) {
+        console.error("multilingualChatFlow: History is empty or invalid after cleaning.");
+        return { error: "Invalid conversation history provided." };
+      }
+
+      // Step 2: Inject system instructions for Cocotalks (if applicable)
       if (persona || rules) {
         const systemPrompt = createSystemPrompt(persona, rules);
-        
-        // Find the first user message and prepend the system prompt
-        const firstUserMessageIndex = historyForGenkit.findIndex(msg => msg.role === 'user');
-        if (firstUserMessageIndex !== -1) {
-          const originalContent = historyForGenkit[firstUserMessageIndex].content;
-          historyForGenkit[firstUserMessageIndex].content = `${systemPrompt}\n\n---\n\nUser Request:\n${originalContent}`;
+        const firstUserMessage = historyForGenkit[0];
+        // Prepend the system prompt to the first user message.
+        firstUserMessage.content = `${systemPrompt}\n\n---\n\nUser Request:\n${firstUserMessage.content}`;
+      }
+
+      // Step 3: Call the AI with the prepared history
+      const genkitResponse = await ai.generate({
+        model: activeModel,
+        history: historyForGenkit,
+        tools: [searchWebTool],
+        toolChoice: 'auto',
+        config: {
+          temperature: 0.7,
+          maxOutputTokens: 4000,
         }
-      }
-
-      // Final validation before calling AI
-      if (!Array.isArray(historyForGenkit) || historyForGenkit.length === 0) {
-        throw new Error('History is empty after all processing');
-      }
-
-      // Start the generation process
-      let genkitResponse;
-      try {
-        genkitResponse = await ai.generate({
+      });
+      
+      // Step 4: Handle potential tool calls
+      // (This part is simplified as tool calls are not the primary issue right now)
+      const toolCalls = genkitResponse.toolCalls();
+      if (toolCalls.length > 0) {
+        const toolOutputs = await Promise.all(toolCalls.map(ai.runTool));
+        const finalResponse = await ai.generate({
           model: activeModel,
-          history: historyForGenkit,
+          history: [...historyForGenkit, genkitResponse.message, ...toolOutputs],
           tools: [searchWebTool],
-          toolChoice: 'auto',
-          config: {
-            temperature: 0.7,
-            maxOutputTokens: 4000,
-          }
         });
-      } catch (error: any) {
-        console.error(`Generation attempt failed:`, error.message);
-        throw new Error(`Failed to generate response: ${error.message}`);
-      }
-
-      // Handle tool calls in a loop with safety limits
-      let toolCallCount = 0;
-      const maxToolCalls = 5;
-
-      while (toolCallCount < maxToolCalls) {
-        // If the response contains text, we're done
-        if (genkitResponse.text?.trim()) {
-          break;
-        }
-
-        const toolCalls = genkitResponse.toolCalls();
-        if (toolCalls && toolCalls.length > 0) {
-          const toolOutputs: Message[] = [];
-          
-          for (const call of toolCalls) {
-            try {
-              const output = await ai.runTool(call);
-              toolOutputs.push(output as Message);
-            } catch (toolError: any) {
-              console.error('Tool execution failed:', toolError.message);
-              toolOutputs.push({
-                role: 'tool',
-                content: `Tool execution failed: ${toolError.message}`
-              });
-            }
-          }
-          
-          const newHistory = [...historyForGenkit, genkitResponse.message, ...toolOutputs];
-          
-          try {
-            genkitResponse = await ai.generate({
-              model: activeModel,
-              history: newHistory,
-              tools: [searchWebTool],
-              toolChoice: 'auto',
-              config: {
-                temperature: 0.7,
-                maxOutputTokens: 4000,
-              }
-            });
-            toolCallCount++;
-          } catch (regenError: any) {
-            console.error('Regeneration after tool call failed:', regenError.message);
-            // Break loop on regen error to avoid infinite loops
-            genkitResponse = { ...genkitResponse, text: "J'ai rencontré un problème en essayant d'utiliser mes outils. Veuillez réessayer." };
-            break;
-          }
-        } else {
-          // No text and no tool calls - abnormal state, break loop
-          break;
-        }
-      }
-
-      // Extract the final text response
-      const finalText = genkitResponse?.text?.trim() || '';
-      
-      if (!finalText) {
-        console.warn('No text response generated, using fallback');
-        return { 
-          response: 'Je suis désolé, je n\'ai pas pu générer une réponse appropriée. Pouvez-vous reformuler votre demande ?' 
-        };
+        return { response: finalResponse.text() };
       }
       
-      return { response: finalText };
+      const responseText = genkitResponse.text();
+      if (!responseText) {
+          return { response: "Désolé, je n'ai pas pu générer une réponse." };
+      }
+
+      return { response: responseText };
 
     } catch (error: any) {
       console.error('Critical error in multilingualChatFlow:', error);
-      
-      const fallbackMessage = error.message?.includes('quota') || error.message?.includes('rate limit')
+      const errorMessage = error.message?.includes('quota') || error.message?.includes('rate limit')
         ? 'Le service est temporairement surchargé. Veuillez réessayer dans quelques instants.'
-        : `Une erreur technique s'est produite: ${error.message}`;
-      
-      return { response: fallbackMessage };
+        : `Une erreur est survenue: ${error.message}`;
+      return { error: errorMessage };
     }
   }
 );
