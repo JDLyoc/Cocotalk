@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { Paperclip, Send, Loader2, MessageSquare, FileUp, ScanSearch, Sparkles } from "lucide-react";
+import { Paperclip, Send, Loader2, MessageSquare, FileUp, ScanSearch, Sparkles, ArrowDown } from "lucide-react";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { ScrollArea } from "./ui/scroll-area";
@@ -63,17 +63,55 @@ export function ChatPanel({ messages, onSendMessage, isLoading, isWelcomeMode = 
   const [file, setFile] = React.useState<File | null>(null);
   const docFileInputRef = React.useRef<HTMLInputElement>(null);
   const imageFileInputRef = React.useRef<HTMLInputElement>(null);
+
   const scrollAreaRef = React.useRef<HTMLDivElement>(null);
+  const viewportRef = React.useRef<HTMLDivElement | null>(null);
+  const [isAtBottom, setIsAtBottom] = React.useState(true);
+  
   const { toast } = useToast();
 
-  React.useEffect(() => {
-    if (scrollAreaRef.current) {
-      scrollAreaRef.current.scrollTo({
-        top: scrollAreaRef.current.scrollHeight,
-        behavior: 'smooth'
-      });
+  const scrollToBottom = React.useCallback(() => {
+    if (viewportRef.current) {
+        viewportRef.current.scrollTo({
+            top: viewportRef.current.scrollHeight,
+            behavior: 'smooth'
+        });
     }
-  }, [messages]);
+  }, []);
+
+  React.useEffect(() => {
+    const scrollAreaElement = scrollAreaRef.current;
+    if (scrollAreaElement) {
+        const viewportElement = scrollAreaElement.querySelector<HTMLDivElement>('[data-radix-scroll-area-viewport]');
+        if (viewportElement) {
+            viewportRef.current = viewportElement;
+
+            const handleScroll = () => {
+                if (viewportRef.current) {
+                    const { scrollTop, scrollHeight, clientHeight } = viewportRef.current;
+                    const atBottom = scrollHeight - scrollTop - clientHeight < 100;
+                    setIsAtBottom(atBottom);
+                }
+            };
+
+            viewportElement.addEventListener('scroll', handleScroll, { passive: true });
+            handleScroll(); // Initial check
+
+            return () => {
+                viewportElement.removeEventListener('scroll', handleScroll);
+            };
+        }
+    }
+  }, []);
+
+  React.useEffect(() => {
+    // When new messages arrive, scroll to bottom automatically.
+    // Use a small timeout to allow the DOM to update.
+    const timer = setTimeout(() => {
+      scrollToBottom();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [messages, scrollToBottom]);
 
   const handleSend = () => {
     if (isLoading) return;
@@ -129,6 +167,18 @@ export function ChatPanel({ messages, onSendMessage, isLoading, isWelcomeMode = 
             )}
           </div>
         </ScrollArea>
+        {!isAtBottom && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
+                <Button
+                    size="icon"
+                    className="rounded-full shadow-lg bg-accent text-accent-foreground hover:bg-accent/90"
+                    onClick={scrollToBottom}
+                >
+                    <ArrowDown className="h-5 w-5" />
+                    <span className="sr-only">Faire défiler vers le bas</span>
+                </Button>
+            </div>
+        )}
       </div>
 
       <div className="border-t p-4 bg-background">
