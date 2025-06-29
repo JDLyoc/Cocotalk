@@ -1,10 +1,9 @@
-
 "use client";
 
 import { Bot, User } from "lucide-react";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { cn } from "@/lib/utils";
-import type { DisplayMessage } from "@/app/page";
+import type { DisplayMessage } from "@/lib/types";
 
 const user = { 
     email: "contentredac@gmail.com",
