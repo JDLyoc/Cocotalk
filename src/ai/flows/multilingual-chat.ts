@@ -1,42 +1,44 @@
 'use server';
 
 /**
- * @fileOverview A simplified, robust, multilingual chat AI agent.
- * Fixed for Gemini API compatibility
+ * @fileOverview Chat AI avec capacité de recherche web
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { searchWebTool } from '@/ai/tools/web-search';
 
-// Define the shape of a single message for input validation
+// Schema pour les messages
 const MessageSchema = z.object({
-  role: z.enum(['user', 'model']), // Only user and model for Gemini
+  role: z.enum(['user', 'model']),
   content: z.string().min(1, 'Message content cannot be empty'),
 });
 
-// Define the input schema for the entire flow
+// Schema d'entrée
 const MultilingualChatInputSchema = z.object({
-  messages: z.array(MessageSchema).min(1, 'At least one message is required').describe('The conversation history.'),
-  model: z.string().optional().describe('The AI model to use.'),
-  language: z.string().optional().describe('Preferred response language.'),
+  messages: z.array(MessageSchema).min(1, 'At least one message is required'),
+  model: z.string().optional(),
+  language: z.string().optional(),
+  enableWebSearch: z.boolean().optional().default(true),
 });
 
 export type MultilingualChatInput = z.infer<typeof MultilingualChatInputSchema>;
 
-// Define the output schema for the flow
+// Schema de sortie
 const MultilingualChatOutputSchema = z.object({
-  response: z.string().optional().describe('The chatbot response.'),
-  error: z.string().optional().describe('An error message if the process failed.'),
-  success: z.boolean().describe('Whether the operation was successful.'),
+  response: z.string().optional(),
+  error: z.string().optional(),
+  success: z.boolean(),
+  searchUsed: z.boolean().optional(),
+  sources: z.array(z.string()).optional(),
 });
 
 export type MultilingualChatOutput = z.infer<typeof MultilingualChatOutputSchema>;
 
-// Main export function
+// Fonction principale
 export async function multilingualChat(input: MultilingualChatInput): Promise<MultilingualChatOutput> {
   try {
-    // Validate input first
+    console.log('🔍 Input received:', JSON.stringify(input, null, 2));
+    
     const validatedInput = MultilingualChatInputSchema.parse(input);
     return await multilingualChatFlow(validatedInput);
   } catch (validationError: any) {
@@ -56,66 +58,79 @@ const multilingualChatFlow = ai.defineFlow(
   },
   async (input) => {
     try {
-      if (!input.messages || input.messages.length === 0) {
+      console.log('🚀 Flow started with web search enabled:', input.enableWebSearch);
+
+      const activeModel = input.model || 'googleai/gemini-1.5-flash-latest';
+      const preferredLanguage = input.language || 'French';
+      
+      // Récupérer le dernier message utilisateur
+      const lastUserMessage = getLastUserMessage(input.messages);
+      if (!lastUserMessage) {
         return { 
-          error: 'No messages provided to the AI. Please send at least one message.', 
+          error: 'No user message found', 
           success: false 
         };
       }
 
-      const activeModel = input.model || 'googleai/gemini-1.5-flash-latest';
-      const preferredLanguage = input.language || 'the same language as the user';
-      
-      const systemPrompt = `You are a helpful and conversational assistant. Respond in ${preferredLanguage}. If the user asks a question that requires information from the internet (like news, articles, or current events), use the 'searchWeb' tool to find the answer.`;
-      
-      // Directly map messages to the format Genkit expects for Gemini.
-      const messagesForGemini = input.messages.map(msg => ({
-          role: msg.role,
-          content: [{ text: msg.content }]
-      }));
+      let searchResults: string[] = [];
+      let searchContext = '';
+      let searchUsed = false;
 
+      // Décider si une recherche web est nécessaire
+      if (input.enableWebSearch && needsWebSearch(lastUserMessage.content)) {
+        console.log('🔍 Web search needed for query:', lastUserMessage.content);
+        
+        const searchResult = await performWebSearch(lastUserMessage.content);
+        if (searchResult.success && searchResult.content) {
+          searchContext = searchResult.content;
+          searchResults = searchResult.sources || [];
+          searchUsed = true;
+          console.log('✅ Web search completed');
+        } else {
+          console.log('⚠️ Web search failed, continuing without it');
+        }
+      }
+
+      // Préparer les messages avec le contexte web si disponible
+      const messagesForGemini = prepareMessagesWithWebContext(
+        input.messages, 
+        preferredLanguage, 
+        searchContext
+      );
+      
+      console.log('📝 Messages prepared, count:', messagesForGemini.length);
+
+      // Appel à l'API Gemini
       const genkitResponse = await ai.generate({
         model: activeModel,
-        system: systemPrompt, // Use the dedicated system prompt field, this is the correct way.
         messages: messagesForGemini,
-        tools: [searchWebTool],
         config: {
           temperature: 0.7,
         },
       });
 
-      const responseText = genkitResponse.text;
+      // Extraire la réponse
+      let responseText = extractResponseText(genkitResponse);
       
       if (!responseText || responseText.trim().length === 0) {
         return { 
-          response: "Sorry, the generated response was empty. Can you rephrase your question?", 
-          success: true 
+          response: "Désolé, je n'ai pas pu générer de réponse.", 
+          success: true,
+          searchUsed 
         };
       }
 
       return { 
         response: responseText.trim(), 
-        success: true 
+        success: true,
+        searchUsed,
+        sources: searchUsed ? searchResults : undefined
       };
 
     } catch (error: any) {
-      console.error('❌ Critical error in multilingualChatFlow:', error);
+      console.error('❌ Error in multilingualChatFlow:', error);
       
-      let errorMessage = 'An unexpected error occurred.';
-      
-      if (error.message?.includes('API key') || error.message?.includes('authentication')) {
-        errorMessage = 'Authentication issue. Check your Google API key in GOOGLE_API_KEY.';
-      } else if (error.message?.includes('quota') || error.message?.includes('rate limit')) {
-        errorMessage = 'API quota exceeded. Please try again later.';
-      } else if (error.message?.includes('model') || error.message?.includes('not found')) {
-        errorMessage = `Model "${input.model || 'default'}" is not available.`;
-      } else if (error.message?.includes('at least one message')) {
-        errorMessage = 'No valid messages were sent to the AI.';
-      } else if (error.message?.includes('system role')) {
-        errorMessage = 'Role configuration error. The model does not support the system role in the message list.';
-      } else {
-        errorMessage = `Technical error: ${error.message}`;
-      }
+      let errorMessage = getErrorMessage(error);
       
       return { 
         error: errorMessage, 
@@ -124,3 +139,223 @@ const multilingualChatFlow = ai.defineFlow(
     }
   }
 );
+
+// Détecter si une recherche web est nécessaire
+function needsWebSearch(userMessage: string): boolean {
+  const currentKeywords = [
+    'actualité', 'actualités', 'news', 'aujourd\'hui', 'maintenant', 'récent',
+    'dernière', 'dernières', 'current', 'latest', 'breaking', 'info du jour',
+    'quoi de neuf', 'what\'s new', 'recent', 'prix actuel', 'cours de',
+    'météo', 'weather', 'trafic', 'traffic', 'score', 'résultat',
+    'élection', 'politique', 'bourse', 'crypto', 'bitcoin', 'stock',
+    'covid', 'virus', 'épidémie', 'vaccination', 'statistiques',
+    'guerre', 'conflit', 'urgence', 'alerte', 'incident'
+  ];
+
+  const timeKeywords = [
+    '2024', '2025', 'cette année', 'ce mois', 'cette semaine',
+    'hier', 'avant-hier', 'la semaine dernière', 'le mois dernier'
+  ];
+
+  const message = userMessage.toLowerCase();
+  
+  return currentKeywords.some(keyword => message.includes(keyword)) ||
+         timeKeywords.some(keyword => message.includes(keyword)) ||
+         message.includes('?') && (message.includes('quand') || message.includes('when'));
+}
+
+// Simuler une recherche web (à remplacer par une vraie API)
+async function performWebSearch(query: string): Promise<{
+  success: boolean;
+  content?: string;
+  sources?: string[];
+}> {
+  try {
+    // OPTION 1: Utiliser l'API Serper (recommandé)
+    if (process.env.SERPER_API_KEY) {
+      return await searchWithSerper(query);
+    }
+    
+    // OPTION 2: Utiliser l'API Brave Search
+    if (process.env.BRAVE_API_KEY) {
+      return await searchWithBrave(query);
+    }
+    
+    // OPTION 3: Utiliser Google Custom Search
+    if (process.env.GOOGLE_SEARCH_API_KEY && process.env.GOOGLE_SEARCH_ENGINE_ID) {
+      return await searchWithGoogle(query);
+    }
+    
+    // Fallback: suggérer à l'utilisateur
+    return {
+      success: false,
+      content: "Je n'ai pas accès aux informations en temps réel car aucune clé API de recherche n'est configurée."
+    };
+    
+  } catch (error) {
+    console.error('Web search error:', error);
+    return { success: false };
+  }
+}
+
+// Recherche avec Serper API (gratuit jusqu'à 2500 requêtes/mois)
+async function searchWithSerper(query: string) {
+  const response = await fetch('https://google.serper.dev/search', {
+    method: 'POST',
+    headers: {
+      'X-API-KEY': process.env.SERPER_API_KEY!,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      q: query,
+      num: 5,
+      hl: 'fr' // langue française
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Serper API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  
+  let content = '';
+  const sources: string[] = [];
+  
+  if (data.organic) {
+    data.organic.slice(0, 3).forEach((result: any) => {
+      content += `${result.title}\n${result.snippet}\n\n`;
+      sources.push(result.link);
+    });
+  }
+  
+  return { success: true, content, sources };
+}
+
+// Recherche avec Brave Search API
+async function searchWithBrave(query: string) {
+  const response = await fetch(
+    `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`,
+    {
+      headers: {
+        'X-Subscription-Token': process.env.BRAVE_API_KEY!,
+        'Accept': 'application/json',
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Brave API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  
+  let content = '';
+  const sources: string[] = [];
+  
+  if (data.web?.results) {
+    data.web.results.slice(0, 3).forEach((result: any) => {
+      content += `${result.title}\n${result.description}\n\n`;
+      sources.push(result.url);
+    });
+  }
+  
+  return { success: true, content, sources };
+}
+
+// Recherche avec Google Custom Search
+async function searchWithGoogle(query: string) {
+  const response = await fetch(
+    `https://www.googleapis.com/customsearch/v1?key=${process.env.GOOGLE_SEARCH_API_KEY}&cx=${process.env.GOOGLE_SEARCH_ENGINE_ID}&q=${encodeURIComponent(query)}&num=5`
+  );
+
+  if (!response.ok) {
+    throw new Error(`Google Search API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  
+  let content = '';
+  const sources: string[] = [];
+  
+  if (data.items) {
+    data.items.slice(0, 3).forEach((result: any) => {
+      content += `${result.title}\n${result.snippet}\n\n`;
+      sources.push(result.link);
+    });
+  }
+  
+  return { success: true, content, sources };
+}
+
+// Préparer les messages avec contexte web
+function prepareMessagesWithWebContext(
+  messages: MultilingualChatInput['messages'], 
+  preferredLanguage: string, 
+  searchContext: string
+) {
+  const baseInstruction = `Please respond in ${preferredLanguage}. Be helpful and conversational.`;
+  
+  let systemInstruction = baseInstruction;
+  
+  if (searchContext) {
+    systemInstruction += `\n\nContext from web search:\n${searchContext}\n\nUse this information to provide current and accurate answers. Always mention when you're using web search results.`;
+  }
+  
+  const preparedMessages: any[] = [];
+  
+  messages.forEach((msg, index) => {
+    if (!msg.content || msg.content.trim().length === 0) {
+      return;
+    }
+
+    let content = msg.content.trim();
+    
+    // Ajouter les instructions au premier message utilisateur
+    if (index === 0 && msg.role === 'user') {
+      content = `${systemInstruction}\n\n---\n\n${content}`;
+    }
+    
+    preparedMessages.push({
+      role: msg.role,
+      content: [{ text: content }]
+    });
+  });
+  
+  return preparedMessages;
+}
+
+// Utilitaires
+function getLastUserMessage(messages: MultilingualChatInput['messages']) {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'user') {
+      return messages[i];
+    }
+  }
+  return null;
+}
+
+function extractResponseText(genkitResponse: any): string {
+  if (typeof genkitResponse.text === 'string') {
+    return genkitResponse.text;
+  }
+  if (typeof genkitResponse.text === 'function') {
+    return genkitResponse.text();
+  }
+  if (genkitResponse.output?.text) {
+    return genkitResponse.output.text;
+  }
+  return '';
+}
+
+function getErrorMessage(error: any): string {
+  if (error.message?.includes('API key') || error.message?.includes('authentication')) {
+    return 'Problème d\'authentification. Vérifiez vos clés API.';
+  } else if (error.message?.includes('quota') || error.message?.includes('rate limit')) {
+    return 'Quota API dépassé. Veuillez réessayer plus tard.';
+  } else if (error.message?.includes('model')) {
+    return 'Modèle non disponible.';
+  } else {
+    return `Erreur technique: ${error.message}`;
+  }
+}
