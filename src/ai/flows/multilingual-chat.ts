@@ -48,19 +48,16 @@ const multilingualChatFlow = ai.defineFlow(
       const { messages, persona, rules, model } = input;
       const activeModel = model || 'googleai/gemini-2.0-flash';
       
+      // Guard against empty input, this is critical.
       if (!messages || messages.length === 0) {
-        return { error: "INVALID_ARGUMENT: At least one message is required to start a conversation." };
+        return { error: "INVALID_ARGUMENT: Conversation history cannot be empty." };
       }
       
-      const conversationHistory: Message[] = messages.map(msg => ({
-          role: msg.role as 'user' | 'model' | 'tool',
-          content: [{ text: msg.content }]
-      }));
+      // Build the history for the AI in a robust way.
+      const historyForAI: Message[] = [];
       
-      let historyForAI: Message[];
-
+      // Step 1: Add system instructions via a few-shot prompt if it's a Cocotalk.
       if (rules) {
-        // This is a Cocotalk session with specific rules.
         const fullPersona = persona || 'You are a helpful, knowledgeable, and friendly AI assistant.';
         const systemPrompt = `You are a powerful and flexible conversational AI assistant.
 Your behavior is defined by the following persona and rules. You MUST follow them carefully.
@@ -71,20 +68,17 @@ ${fullPersona}
 ## Rules & Scenario
 ${rules}`;
         
-        historyForAI = [
-          { role: 'user', content: [{ text: systemPrompt }] },
-          { role: 'model', content: [{ text: "Yes, I understand. I will follow these instructions." }] },
-          ...conversationHistory
-        ];
-      } else {
-        // This is a standard chat session.
-        historyForAI = conversationHistory;
+        historyForAI.push({ role: 'user', content: [{ text: systemPrompt }] });
+        historyForAI.push({ role: 'model', content: [{ text: "Yes, I understand. I will follow these instructions." }] });
       }
       
-      // Final guard to prevent the error.
-      if (historyForAI.length === 0) {
-        return { error: "Internal error: The history for the AI was empty before the request." };
-      }
+      // Step 2: Add the actual conversation history.
+      messages.forEach(msg => {
+        historyForAI.push({
+          role: msg.role as 'user' | 'model' | 'tool',
+          content: [{ text: msg.content }]
+        });
+      });
 
       const genkitResponse = await ai.generate({
         model: activeModel,
@@ -132,8 +126,6 @@ ${rules}`;
         errorMessage = 'The service is temporarily overloaded. Please try again in a moment.';
       } else if (error.message?.includes('Schema validation failed')) {
         errorMessage = `A data validation error occurred, indicating a mismatch between the data sent and the format expected by the AI. Details: ${error.message}`;
-      } else if (error.message?.includes('at least one message is required')) {
-          errorMessage = 'An internal error occurred: the conversation history sent to the AI was empty. This can happen with a new conversation. Please try again.';
       }
 
       return { error: errorMessage };
