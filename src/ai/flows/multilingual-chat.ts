@@ -52,15 +52,15 @@ const multilingualChatFlow = ai.defineFlow(
         return { error: "INVALID_ARGUMENT: At least one message is required to start a conversation." };
       }
       
-      const genkitMessages: Message[] = messages.map(msg => ({
+      const conversationHistory: Message[] = messages.map(msg => ({
           role: msg.role as 'user' | 'model' | 'tool',
           content: [{ text: msg.content }]
       }));
       
-      let historyForAI: Message[] = genkitMessages;
+      let historyForAI: Message[];
 
-      // Logic for Cocotalk with persona and rules
       if (rules) {
+        // This is a Cocotalk session with specific rules.
         const fullPersona = persona || 'You are a helpful, knowledgeable, and friendly AI assistant.';
         const systemPrompt = `You are a powerful and flexible conversational AI assistant.
 Your behavior is defined by the following persona and rules. You MUST follow them carefully.
@@ -70,14 +70,22 @@ ${fullPersona}
 
 ## Rules & Scenario
 ${rules}`;
-        // Prepend the system instructions as a user/model pair to guide the AI
+        
         historyForAI = [
           { role: 'user', content: [{ text: systemPrompt }] },
           { role: 'model', content: [{ text: "Yes, I understand. I will follow these instructions." }] },
-          ...genkitMessages
+          ...conversationHistory
         ];
+      } else {
+        // This is a standard chat session.
+        historyForAI = conversationHistory;
       }
       
+      // Final guard to prevent the error.
+      if (historyForAI.length === 0) {
+        return { error: "Internal error: The history for the AI was empty before the request." };
+      }
+
       const genkitResponse = await ai.generate({
         model: activeModel,
         history: historyForAI,
@@ -124,6 +132,8 @@ ${rules}`;
         errorMessage = 'The service is temporarily overloaded. Please try again in a moment.';
       } else if (error.message?.includes('Schema validation failed')) {
         errorMessage = `A data validation error occurred, indicating a mismatch between the data sent and the format expected by the AI. Details: ${error.message}`;
+      } else if (error.message?.includes('at least one message is required')) {
+          errorMessage = 'An internal error occurred: the conversation history sent to the AI was empty. This can happen with a new conversation. Please try again.';
       }
 
       return { error: errorMessage };
