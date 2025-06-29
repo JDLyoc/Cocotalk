@@ -71,6 +71,8 @@ export default function SignUpPage() {
         description = "L'adresse e-mail n'est pas valide.";
       } else if (error.code === 'auth/operation-not-allowed') {
         description = "La connexion par e-mail/mot de passe n'est pas activée. Veuillez l'activer dans la console Firebase.";
+      } else if (error.code === 'auth/network-request-failed') {
+        description = "Erreur de réseau. Vérifiez que les variables Firebase dans votre fichier .env sont correctes.";
       }
       toast({ variant: 'destructive', title: 'Erreur d\'inscription', description });
     } finally {
@@ -110,6 +112,9 @@ export default function SignUpPage() {
             </div>
           </CardFooter>
         </form>
+        <div className="text-center text-xs text-muted-foreground p-4 border-t mt-2">
+          ID du projet de débogage : <span className="font-mono bg-muted p-1 rounded">{process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "Non défini"}</span>
+        </div>
       </Card>
     </div>
   );
