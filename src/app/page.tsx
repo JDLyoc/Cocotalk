@@ -190,14 +190,13 @@ export default function Home() {
     };
     
     const currentConversationId = activeConversationId;
+    const historyForAI = [...(activeConversation?.messages || []), userMessageForDb];
 
     try {
       const aiResult = await invokeAiChat({
-          conversationId: currentConversationId,
-          messageContent: messageContent,
+          historyWithNewMessage: historyForAI,
           model: model,
           activeCocotalk: activeCocotalk || null,
-          userId: currentUser.uid,
       });
 
       if (aiResult.error || !aiResult.response) {
