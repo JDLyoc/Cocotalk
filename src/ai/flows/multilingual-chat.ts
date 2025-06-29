@@ -69,19 +69,15 @@ const multilingualChatFlow = ai.defineFlow(
 
       const systemPrompt = (persona || rules) ? createSystemPrompt(persona, rules) : undefined;
       
-      // Convert the simple string-based messages to the structure Genkit expects.
       const genkitMessages: Message[] = messages.map(msg => ({
           role: msg.role as 'user' | 'model' | 'tool',
           content: [{ text: msg.content }]
       }));
       
-      // The history is all messages EXCEPT the last one.
       const historyForGenkit: Message[] = genkitMessages.slice(0, -1);
-      // The prompt is the content of the very last message.
       const lastMessage = genkitMessages[genkitMessages.length - 1];
       const promptForGenkit = lastMessage.content;
 
-      // Call the AI with the prepared history and system prompt
       const genkitResponse = await ai.generate({
         model: activeModel,
         system: systemPrompt,
@@ -95,14 +91,12 @@ const multilingualChatFlow = ai.defineFlow(
         }
       });
       
-      // Handle potential tool calls
       const toolCalls = genkitResponse.toolCalls;
       if (toolCalls && toolCalls.length > 0) {
         const toolOutputs = await Promise.all(toolCalls.map(ai.runTool));
         const finalResponse = await ai.generate({
           model: activeModel,
           system: systemPrompt,
-          // The new history includes the original messages, the model's tool request, and the tool's response
           history: [...genkitMessages, genkitResponse.message, ...toolOutputs],
           tools: [searchWebTool],
         });
@@ -121,14 +115,16 @@ const multilingualChatFlow = ai.defineFlow(
       console.error('Critical error in multilingualChatFlow:', error);
       
       let errorMessage = `Une erreur est survenue: ${error.message}`;
-      if (error.message?.includes('INVALID_ARGUMENT')) {
-        errorMessage = `Un argument invalide a été envoyé à l'IA. Détails: ${error.message}`;
+      if (error.message?.includes('API key not valid')) {
+        errorMessage = `La clé API Google est invalide. Veuillez vérifier la variable GOOGLE_API_KEY dans votre fichier .env.`;
+      } else if (error.message?.includes('permission') || error.message?.includes('denied')) {
+        errorMessage = `Erreur de permission. La cause la plus probable est une restriction sur votre clé API.
+Allez dans la console Google Cloud > API et services > Identifiants.
+Cliquez sur votre clé API et dans "Restrictions d'application", sélectionnez "Aucune".
+Vérifiez aussi que l'API "Gemini" est activée et que la facturation est liée au projet.`;
       } else if (error.message?.includes('quota') || error.message?.includes('rate limit')) {
         errorMessage = 'Le service est temporairement surchargé. Veuillez réessayer dans quelques instants.';
-      } else if (error.message?.toLowerCase().includes('permission')) {
-        errorMessage = "Erreur de permission. Vérifiez les points suivants sur la console Google Cloud : 1) Assurez-vous d'avoir sélectionné le bon projet en haut de la page. 2) Activez l'API 'Gemini' pour ce projet. 3) Vérifiez que le projet est bien associé à un compte de facturation actif.";
       }
-
 
       return { error: errorMessage };
     }
