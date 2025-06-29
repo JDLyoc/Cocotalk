@@ -1,41 +1,25 @@
-
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper function to get the authenticated user's data document.
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
-
-    // Rules for the 'users' collection
-    match /users/{userId} {
-      // Allow users to create their own user document on signup.
-      allow create: if request.auth.uid == userId;
-
-      // Users can only read and update their own document.
-      allow read, update: if request.auth.uid == userId;
-
-      // Rules for the 'conversations' subcollection
-      match /conversations/{conversationId} {
-        // Users can manage their own conversations.
-        allow read, write, delete: if request.auth.uid == userId;
-      }
-      
-      // Rules for the 'cocotalks' subcollection
-      match /cocotalks/{cocotalkId} {
-        // Users can manage their own cocotalks.
-        allow read, write, delete: if request.auth.uid == userId;
-      }
-    }
-
-    // Rules for the 'settings' collection, specifically for the logo
+    // Allow reads to the global logo settings for everyone,
+    // and writes for authenticated users.
     match /settings/logo {
-      // Any authenticated user can read the logo.
-      allow read: if request.auth != null;
-      
-      // Only users with the 'admin' role can change the logo.
-      allow write: if request.auth != null && getUserData().role == 'admin';
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // Allow an authenticated user to create, read, and update their own user document.
+    // This is crucial for tracking login times and other user-specific data.
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Allow a user to manage all documents within their own sub-collections
+    // (e.g., creating, reading, updating, and deleting conversations).
+    match /users/{userId}/{documents=**} {
+      allow read, write, delete: if request.auth != null && request.auth.uid == userId;
     }
   }
 }
