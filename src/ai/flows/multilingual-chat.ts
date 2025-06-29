@@ -58,13 +58,21 @@ const multilingualChatFlow = ai.defineFlow(
       const preferredLanguage = input.language || 'the user\'s language';
 
       // System instruction now includes the model name
-      const system = `You are a helpful and conversational assistant running on the ${activeModel} model. Please respond in ${preferredLanguage}. When asked what model you are, you must state the model name clearly.`;
+      const systemInstruction = `You are a helpful and conversational assistant running on the ${activeModel} model. Please respond in ${preferredLanguage}. When asked what model you are, you must state the model name clearly.`;
       
-      // Call the Gemini API using the 'system' parameter for instructions
+      // Prepend the system instruction to the first user message for universal compatibility
+      const messagesWithInstruction = [...input.messages];
+      if (messagesWithInstruction.length > 0 && messagesWithInstruction[0].role === 'user') {
+        messagesWithInstruction[0] = {
+          ...messagesWithInstruction[0],
+          content: `${systemInstruction}\n\n---\n\n${messagesWithInstruction[0].content}`,
+        };
+      }
+      
+      // Call the Gemini API 
       const genkitResponse = await ai.generate({
         model: activeModel,
-        system: system, 
-        messages: input.messages.map(msg => ({
+        messages: messagesWithInstruction.map(msg => ({
             role: msg.role,
             content: [{ text: msg.content }]
         })),
@@ -127,7 +135,10 @@ function getErrorMessage(error: any): string {
     return 'Quota API dépassé. Veuillez réessayer plus tard.';
   } else if (error.message?.includes('model')) {
     return 'Modèle non disponible.';
-  } else {
+  } else if (error.message?.includes('system role is not supported')) {
+    return 'Ce modèle IA ne supporte pas les instructions système de cette manière. Essayez un autre modèle.';
+  }
+  else {
     return `Erreur technique: ${error.message}`;
   }
 }
