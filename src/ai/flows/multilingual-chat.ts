@@ -2,8 +2,7 @@
 'use server';
 
 /**
- * @fileOverview A generic, instruction-driven, multilingual chat AI agent.
- * This agent can use tools like web search.
+ * @fileOverview A simplified, robust, multilingual chat AI agent.
  */
 
 import { ai } from '@/ai/genkit';
@@ -11,19 +10,22 @@ import { z } from 'zod';
 import type { Message } from 'genkit';
 import { searchWebTool } from '@/ai/tools/web-search';
 
+// Define the shape of a single message for input validation
 const MessageSchema = z.object({
-  role: z.enum(['user', 'model', 'tool']),
+  role: z.enum(['user', 'model']),
   content: z.string(),
 });
 
+// Define the input schema for the entire flow
 const MultilingualChatInputSchema = z.object({
-  messages: z.array(MessageSchema).describe('The entire conversation history, from oldest to newest.'),
-  model: z.string().optional().describe('The specific AI model to use for the generation.'),
+  messages: z.array(MessageSchema).describe('The conversation history.'),
+  model: z.string().optional().describe('The AI model to use.'),
 });
 export type MultilingualChatInput = z.infer<typeof MultilingualChatInputSchema>;
 
+// Define the output schema for the flow
 const MultilingualChatOutputSchema = z.object({
-  response: z.string().optional().describe('The chatbot response in the same language as the user message.'),
+  response: z.string().optional().describe('The chatbot response.'),
   error: z.string().optional().describe('An error message if the process failed.'),
 });
 export type MultilingualChatOutput = z.infer<typeof MultilingualChatOutputSchema>;
@@ -41,23 +43,21 @@ const multilingualChatFlow = ai.defineFlow(
     outputSchema: MultilingualChatOutputSchema,
   },
   async (input) => {
-    try {
-      const { messages, model } = input;
-      const activeModel = model || 'googleai/gemini-2.0-flash';
-      
-      if (!messages || messages.length === 0) {
-        return { error: "INVALID_ARGUMENT: Conversation history cannot be empty." };
-      }
-      
-      const historyForAI: Message[] = [];
-      
-      messages.forEach(msg => {
-        historyForAI.push({
-          role: msg.role as 'user' | 'model' | 'tool',
-          content: [{ text: msg.content }]
-        });
-      });
+    // This is our main safeguard. If the messages array is empty, we stop here.
+    if (!input.messages || input.messages.length === 0) {
+      return { error: 'An error occurred: INVALID_ARGUMENT: at least one message is required in generate request' };
+    }
 
+    const activeModel = input.model || 'googleai/gemini-2.0-flash';
+
+    // Directly map the input messages to the format required by the AI.
+    // This is a critical step to ensure data consistency.
+    const historyForAI: Message[] = input.messages.map(msg => ({
+      role: msg.role,
+      content: [{ text: msg.content }]
+    }));
+
+    try {
       const genkitResponse = await ai.generate({
         model: activeModel,
         history: historyForAI,
@@ -65,10 +65,10 @@ const multilingualChatFlow = ai.defineFlow(
         toolChoice: 'auto',
         config: {
           temperature: 0.7,
-          maxOutputTokens: 4000,
-        }
+        },
       });
-      
+
+      // Handle the case where the AI might call a tool (like web search)
       const toolCalls = genkitResponse.toolCalls;
       if (toolCalls && toolCalls.length > 0) {
         const toolOutputs = await Promise.all(toolCalls.map(ai.runTool));
@@ -79,33 +79,22 @@ const multilingualChatFlow = ai.defineFlow(
         });
         return { response: finalResponse.text };
       }
-      
+
       const responseText = genkitResponse.text;
       if (!responseText) {
-          return { response: "Désolé, je n'ai pas pu générer de réponse." };
+        return { response: "Désolé, je n'ai pas pu générer de réponse." };
       }
 
       return { response: responseText };
 
-    } catch (error: any)
-    {
-      console.error('Critical error in multilingualChatFlow:', error);
-      
-      let errorMessage = `An error occurred: ${error.message}`;
-      if (error.message?.includes('API key not valid')) {
+    } catch (e: any) {
+      console.error('Critical error in multilingualChatFlow:', e);
+      let errorMessage = `An error occurred: ${e.message}`;
+       if (e.message?.includes('at least one message is required')) {
+          errorMessage = 'The AI received an empty request. This is a bug.';
+      } else if (e.message?.includes('API key not valid')) {
         errorMessage = `The Google API key is invalid. Please check the GOOGLE_API_KEY variable in your .env file.`;
-      } else if (error.message?.includes('permission') || error.message?.includes('denied')) {
-        errorMessage = `Permission error. Likely causes:
-1. API Key Restrictions: In Google Cloud Console > APIs & Services > Credentials > [Your API Key], ensure "Application restrictions" is "None" AND "API restrictions" is "Don't restrict key".
-2. API Not Enabled: Ensure the "Gemini API" is enabled for this project.
-3. Billing Not Linked: Ensure billing is enabled and linked to this project.
-4. Wrong Project: Ensure the project at the top of the Google Cloud Console is the correct one.`;
-      } else if (error.message?.includes('quota') || error.message?.includes('rate limit')) {
-        errorMessage = 'The service is temporarily overloaded. Please try again in a moment.';
-      } else if (error.message?.includes('Schema validation failed')) {
-        errorMessage = `A data validation error occurred, indicating a mismatch between the data sent and the format expected by the AI. Details: ${error.message}`;
       }
-
       return { error: errorMessage };
     }
   }
