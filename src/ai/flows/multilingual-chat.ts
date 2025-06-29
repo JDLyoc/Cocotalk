@@ -61,7 +61,7 @@ const multilingualChatFlow = ai.defineFlow(
       console.log('🚀 Flow started with web search enabled:', input.enableWebSearch);
 
       const activeModel = input.model || 'googleai/gemini-1.5-flash-latest';
-      const preferredLanguage = input.language || 'French';
+      const preferredLanguage = input.language || 'the user\'s language';
       
       // Récupérer le dernier message utilisateur
       const lastUserMessage = getLastUserMessage(input.messages);
@@ -81,13 +81,28 @@ const multilingualChatFlow = ai.defineFlow(
         console.log('🔍 Web search needed for query:', lastUserMessage.content);
         
         const searchResult = await performWebSearch(lastUserMessage.content);
+        
+        // Si la recherche a réussi ET a renvoyé du contenu...
         if (searchResult.success && searchResult.content) {
           searchContext = searchResult.content;
           searchResults = searchResult.sources || [];
           searchUsed = true;
           console.log('✅ Web search completed');
-        } else {
-          console.log('⚠️ Web search failed, continuing without it');
+        } 
+        // Si la recherche a échoué MAIS a renvoyé un message d'erreur...
+        else if (!searchResult.success && searchResult.content) {
+          console.log('⚠️ Web search failed, returning error message directly to user.');
+          // On retourne directement le message d'erreur à l'utilisateur.
+          // C'est plus clair que de laisser l'IA répondre.
+          return {
+            response: searchResult.content,
+            success: true, // Le flux a réussi à produire une réponse (le message d'erreur).
+            searchUsed: false,
+          };
+        } 
+        // Si la recherche a échoué sans message, on continue sans.
+        else {
+          console.log('⚠️ Web search failed silently, continuing without it.');
         }
       }
 
@@ -149,7 +164,7 @@ function needsWebSearch(userMessage: string): boolean {
     'météo', 'weather', 'trafic', 'traffic', 'score', 'résultat',
     'élection', 'politique', 'bourse', 'crypto', 'bitcoin', 'stock',
     'covid', 'virus', 'épidémie', 'vaccination', 'statistiques',
-    'guerre', 'conflit', 'urgence', 'alerte', 'incident'
+    'guerre', 'conflit', 'urgence', 'alerte', 'incident', 'rfi'
   ];
 
   const timeKeywords = [
@@ -164,7 +179,6 @@ function needsWebSearch(userMessage: string): boolean {
          message.includes('?') && (message.includes('quand') || message.includes('when'));
 }
 
-// Simuler une recherche web (à remplacer par une vraie API)
 async function performWebSearch(query: string): Promise<{
   success: boolean;
   content?: string;
@@ -186,15 +200,16 @@ async function performWebSearch(query: string): Promise<{
       return await searchWithGoogle(query);
     }
     
-    // Fallback: suggérer à l'utilisateur
+    // Fallback: message d'erreur clair si aucune clé n'est configurée.
     return {
       success: false,
-      content: "Je n'ai pas accès aux informations en temps réel car aucune clé API de recherche n'est configurée."
+      content: "La recherche web n'est pas configurée. Veuillez ajouter une clé API de recherche (par exemple, SERPER_API_KEY) dans votre fichier .env et redémarrer le serveur."
     };
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('Web search error:', error);
-    return { success: false };
+    const friendlyMessage = "Désolé, la recherche sur le web a échoué. Cela peut être dû à une clé API invalide ou à un problème de réseau.";
+    return { success: false, content: friendlyMessage };
   }
 }
 
@@ -209,11 +224,13 @@ async function searchWithSerper(query: string) {
     body: JSON.stringify({
       q: query,
       num: 5,
-      hl: 'fr' // langue française
+      hl: 'fr'
     }),
   });
 
   if (!response.ok) {
+    const errorBody = await response.text();
+    console.error(`Serper API error: ${response.status}`, errorBody);
     throw new Error(`Serper API error: ${response.status}`);
   }
 
@@ -222,9 +239,13 @@ async function searchWithSerper(query: string) {
   let content = '';
   const sources: string[] = [];
   
+  if (data.answerBox) {
+    content += `Réponse directe: ${data.answerBox.snippet || data.answerBox.answer}\n\n`;
+  }
+
   if (data.organic) {
     data.organic.slice(0, 3).forEach((result: any) => {
-      content += `${result.title}\n${result.snippet}\n\n`;
+      content += `Titre: ${result.title}\nExtrait: ${result.snippet}\n\n`;
       sources.push(result.link);
     });
   }
@@ -294,12 +315,12 @@ function prepareMessagesWithWebContext(
   preferredLanguage: string, 
   searchContext: string
 ) {
-  const baseInstruction = `Please respond in ${preferredLanguage}. Be helpful and conversational.`;
+  const baseInstruction = `You are a helpful and conversational assistant. Please respond in ${preferredLanguage}.`;
   
   let systemInstruction = baseInstruction;
   
   if (searchContext) {
-    systemInstruction += `\n\nContext from web search:\n${searchContext}\n\nUse this information to provide current and accurate answers. Always mention when you're using web search results.`;
+    systemInstruction += `\n\nUse the following context from a web search to answer the user's question. Based on this context, provide a comprehensive answer. Cite your sources if possible. \n\n## Web Search Context ##\n${searchContext}`;
   }
   
   const preparedMessages: any[] = [];
@@ -313,7 +334,7 @@ function prepareMessagesWithWebContext(
     
     // Ajouter les instructions au premier message utilisateur
     if (index === 0 && msg.role === 'user') {
-      content = `${systemInstruction}\n\n---\n\n${content}`;
+      content = `${systemInstruction}\n\n---\n\nUser's question: "${content}"`;
     }
     
     preparedMessages.push({
@@ -336,16 +357,22 @@ function getLastUserMessage(messages: MultilingualChatInput['messages']) {
 }
 
 function extractResponseText(genkitResponse: any): string {
-  if (typeof genkitResponse.text === 'string') {
-    return genkitResponse.text;
-  }
-  if (typeof genkitResponse.text === 'function') {
-    return genkitResponse.text();
-  }
-  if (genkitResponse.output?.text) {
-    return genkitResponse.output.text;
-  }
-  return '';
+    if (!genkitResponse) return '';
+    const textValue = genkitResponse.text;
+    if (typeof textValue === 'string') {
+        return textValue;
+    }
+    if (typeof textValue === 'function') {
+        try {
+            return textValue();
+        } catch {
+            return '';
+        }
+    }
+    if (genkitResponse.output?.text) {
+        return genkitResponse.output.text;
+    }
+    return '';
 }
 
 function getErrorMessage(error: any): string {
