@@ -125,7 +125,10 @@ const multilingualChatFlow = ai.defineFlow(
         errorMessage = `Un argument invalide a été envoyé à l'IA. Détails: ${error.message}`;
       } else if (error.message?.includes('quota') || error.message?.includes('rate limit')) {
         errorMessage = 'Le service est temporairement surchargé. Veuillez réessayer dans quelques instants.';
+      } else if (error.message?.toLowerCase().includes('permission')) {
+        errorMessage = "Erreur de permission avec l'API Google AI. Assurez-vous que l'API 'Generative Language' est activée dans votre projet Google Cloud et que les identifiants ont les permissions requises.";
       }
+
 
       return { error: errorMessage };
     }
