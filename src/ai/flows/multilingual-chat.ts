@@ -63,13 +63,29 @@ const multilingualChatFlow = ai.defineFlow(
       const { messages, persona, rules, model } = input;
       const activeModel = model || 'googleai/gemini-2.0-flash';
       
-      const systemPrompt = (persona || rules) ? createSystemPrompt(persona, rules) : undefined;
-      const historyForGenkit: Message[] = [...messages];
+      if (!messages || messages.length === 0) {
+        return { error: "INVALID_ARGUMENT: Au moins un message est requis pour démarrer une conversation." };
+      }
 
-      // Step 3: Call the AI with the prepared history and system prompt
+      const systemPrompt = (persona || rules) ? createSystemPrompt(persona, rules) : undefined;
+      
+      // Convert the simple string-based messages to the structure Genkit expects.
+      const genkitMessages: Message[] = messages.map(msg => ({
+          role: msg.role as 'user' | 'model' | 'tool',
+          content: [{ text: msg.content }]
+      }));
+      
+      // The history is all messages EXCEPT the last one.
+      const historyForGenkit: Message[] = genkitMessages.slice(0, -1);
+      // The prompt is the content of the very last message.
+      const lastMessage = genkitMessages[genkitMessages.length - 1];
+      const promptForGenkit = lastMessage.content;
+
+      // Call the AI with the prepared history and system prompt
       const genkitResponse = await ai.generate({
         model: activeModel,
         system: systemPrompt,
+        prompt: promptForGenkit,
         history: historyForGenkit,
         tools: [searchWebTool],
         toolChoice: 'auto',
@@ -79,31 +95,38 @@ const multilingualChatFlow = ai.defineFlow(
         }
       });
       
-      // Step 4: Handle potential tool calls
-      const toolCalls = genkitResponse.toolCalls();
+      // Handle potential tool calls
+      const toolCalls = genkitResponse.toolCalls;
       if (toolCalls && toolCalls.length > 0) {
         const toolOutputs = await Promise.all(toolCalls.map(ai.runTool));
         const finalResponse = await ai.generate({
           model: activeModel,
           system: systemPrompt,
-          history: [...historyForGenkit, genkitResponse.message, ...toolOutputs],
+          // The new history includes the original messages, the model's tool request, and the tool's response
+          history: [...genkitMessages, genkitResponse.message, ...toolOutputs],
           tools: [searchWebTool],
         });
-        return { response: finalResponse.text() };
+        return { response: finalResponse.text };
       }
       
-      const responseText = genkitResponse.text();
+      const responseText = genkitResponse.text;
       if (!responseText) {
           return { response: "Désolé, je n'ai pas pu générer une réponse." };
       }
 
       return { response: responseText };
 
-    } catch (error: any) {
+    } catch (error: any)
+    {
       console.error('Critical error in multilingualChatFlow:', error);
-      const errorMessage = error.message?.includes('quota') || error.message?.includes('rate limit')
-        ? 'Le service est temporairement surchargé. Veuillez réessayer dans quelques instants.'
-        : `Une erreur est survenue: ${error.message}`;
+      
+      let errorMessage = `Une erreur est survenue: ${error.message}`;
+      if (error.message?.includes('INVALID_ARGUMENT')) {
+        errorMessage = `Un argument invalide a été envoyé à l'IA. Détails: ${error.message}`;
+      } else if (error.message?.includes('quota') || error.message?.includes('rate limit')) {
+        errorMessage = 'Le service est temporairement surchargé. Veuillez réessayer dans quelques instants.';
+      }
+
       return { error: errorMessage };
     }
   }
