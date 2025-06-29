@@ -83,27 +83,27 @@ const multilingualChatFlow = ai.defineFlow(
         
         const searchResult = await performWebSearch(lastUserMessage.content);
         
-        // Si la recherche a réussi ET a renvoyé du contenu...
-        if (searchResult.success && searchResult.content) {
-          searchContext = searchResult.content;
-          searchResults = searchResult.sources || [];
-          searchUsed = true;
-          console.log('✅ Web search completed');
-        } 
-        // Si la recherche a échoué MAIS a renvoyé un message d'erreur...
-        else if (!searchResult.success && searchResult.content) {
+        if (searchResult.success) {
+          // L'appel API a réussi
+          if (searchResult.content) {
+            searchContext = searchResult.content;
+            searchResults = searchResult.sources || [];
+            searchUsed = true;
+            console.log('✅ Web search completed with results');
+          } else {
+            // L'appel a réussi, mais pas de résultats
+            console.log('✅ Web search was successful but returned no content.');
+            searchContext = "La recherche sur le web n'a retourné aucun résultat. Informez l'utilisateur que vous n'avez pas trouvé d'informations pertinentes, puis répondez à sa question avec vos connaissances générales.";
+            searchUsed = true;
+          }
+        } else {
+          // L'appel API a échoué (ex: clé invalide)
           console.log('⚠️ Web search failed, returning error message directly to user.');
-          // On retourne directement le message d'erreur à l'utilisateur.
-          // C'est plus clair que de laisser l'IA répondre.
           return {
-            response: searchResult.content,
-            success: true, // Le flux a réussi à produire une réponse (le message d'erreur).
+            response: searchResult.content, // Le contenu est le message d'erreur.
+            success: true, 
             searchUsed: false,
           };
-        } 
-        // Si la recherche a échoué sans message, on continue sans.
-        else {
-          console.log('⚠️ Web search failed silently, continuing without it.');
         }
       }
 
