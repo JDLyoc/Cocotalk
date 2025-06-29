@@ -20,12 +20,25 @@ This project uses a `.env` file to store secret keys for both Firebase and Googl
 
 ### Google AI Setup (Gemini API)
 
-The app's AI features require a separate API key.
+The app's AI features require a separate API key and configuration in the Google Cloud Console, which is linked to your Firebase project.
 
-1.  **Enable Gemini API:** Go to the [Google Cloud Console](https://console.cloud.google.com/) for the *same project*. Search for and enable the **"Gemini API"**. Your project may also require billing to be enabled to use the API.
+**CRITICAL: Ensure you are performing these steps in the Google Cloud Console for the *exact same project* as your Firebase project.** You can select your project at the top of the Google Cloud Console.
 
-2.  **Create API Key:** In the Google Cloud Console, navigate to **APIs & Services > Credentials**. Click **Create Credentials** and choose **API key**.
+1.  **Enable Billing:** Many Google Cloud services, including the Gemini API, require a billing account to be linked to the project, even if your usage falls within the free tier.
+    *   Go to the [Google Cloud Console](https://console.cloud.google.com/).
+    *   Select your project (`cocotalk-72wpf`).
+    *   In the navigation menu (☰), go to **Billing**.
+    *   Follow the instructions to link your active billing account to this project.
 
-3.  **Set Google AI Variable:** Copy the new API key and paste it as the value for `GOOGLE_API_KEY` in your `.env` file.
+2.  **Enable Gemini API:**
+    *   In the Google Cloud Console search bar at the top, type **"Gemini API"**.
+    *   Select it from the results and click **Enable**.
+
+3.  **Create API Key:**
+    *   In the Google Cloud Console, navigate to **APIs & Services > Credentials**.
+    *   Click **Create Credentials** and choose **API key**.
+    *   For development, it's recommended to temporarily remove all restrictions from the key to ensure it works, and add them back later if needed.
+
+4.  **Set Google AI Variable:** Copy the new API key and paste it as the value for `GOOGLE_API_KEY` in your `.env` file.
 
 Once all variables in `.env` are set, restart your development server for the changes to take effect.
