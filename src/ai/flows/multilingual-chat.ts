@@ -8,7 +8,6 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import type { Message } from 'genkit';
-import { searchWebTool } from '@/ai/tools/web-search';
 
 // Define the shape of a single message for input validation
 const MessageSchema = z.object({
@@ -45,13 +44,13 @@ const multilingualChatFlow = ai.defineFlow(
   async (input) => {
     // This is our main safeguard. If the messages array is empty, we stop here.
     if (!input.messages || input.messages.length === 0) {
-      return { error: 'An error occurred: INVALID_ARGUMENT: at least one message is required in generate request' };
+      console.error('Critical error: multilingualChatFlow received an empty messages array.');
+      return { error: 'The AI received an empty request. This is a bug in the application.' };
     }
 
     const activeModel = input.model || 'googleai/gemini-2.0-flash';
-
-    // Directly map the input messages to the format required by the AI.
-    // This is a critical step to ensure data consistency.
+    
+    // The history needs to be in the Genkit Message format.
     const historyForAI: Message[] = input.messages.map(msg => ({
       role: msg.role,
       content: [{ text: msg.content }]
@@ -60,25 +59,12 @@ const multilingualChatFlow = ai.defineFlow(
     try {
       const genkitResponse = await ai.generate({
         model: activeModel,
+        system: 'You are a helpful and friendly assistant. Always respond in French, regardless of the user\'s language.',
         history: historyForAI,
-        tools: [searchWebTool],
-        toolChoice: 'auto',
         config: {
           temperature: 0.7,
         },
       });
-
-      // Handle the case where the AI might call a tool (like web search)
-      const toolCalls = genkitResponse.toolCalls;
-      if (toolCalls && toolCalls.length > 0) {
-        const toolOutputs = await Promise.all(toolCalls.map(ai.runTool));
-        const finalResponse = await ai.generate({
-          model: activeModel,
-          history: [...historyForAI, genkitResponse.message, ...toolOutputs],
-          tools: [searchWebTool],
-        });
-        return { response: finalResponse.text };
-      }
 
       const responseText = genkitResponse.text;
       if (!responseText) {
@@ -90,9 +76,7 @@ const multilingualChatFlow = ai.defineFlow(
     } catch (e: any) {
       console.error('Critical error in multilingualChatFlow:', e);
       let errorMessage = `An error occurred: ${e.message}`;
-       if (e.message?.includes('at least one message is required')) {
-          errorMessage = 'The AI received an empty request. This is a bug.';
-      } else if (e.message?.includes('API key not valid')) {
+      if (e.message?.includes('API key not valid')) {
         errorMessage = `The Google API key is invalid. Please check the GOOGLE_API_KEY variable in your .env file.`;
       }
       return { error: errorMessage };
