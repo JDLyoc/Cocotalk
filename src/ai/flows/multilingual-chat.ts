@@ -126,7 +126,7 @@ const multilingualChatFlow = ai.defineFlow(
       } else if (error.message?.includes('quota') || error.message?.includes('rate limit')) {
         errorMessage = 'Le service est temporairement surchargé. Veuillez réessayer dans quelques instants.';
       } else if (error.message?.toLowerCase().includes('permission')) {
-        errorMessage = "Erreur de permission avec l'API Google AI. Assurez-vous que l'API 'Gemini' est activée et que votre projet Google Cloud est bien associé à un compte de facturation actif. C'est une étape de configuration obligatoire sur la console Google Cloud.";
+        errorMessage = "Erreur de permission. Vérifiez les points suivants sur la console Google Cloud : 1) Assurez-vous d'avoir sélectionné le bon projet en haut de la page. 2) Activez l'API 'Gemini' pour ce projet. 3) Vérifiez que le projet est bien associé à un compte de facturation actif.";
       }
 
 
