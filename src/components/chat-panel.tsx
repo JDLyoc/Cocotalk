@@ -133,7 +133,7 @@ export function ChatPanel({ messages, onSendMessage, isLoading, isWelcomeMode = 
           
           <div className="space-y-6">
             {messages.map((msg) => (
-              <ChatMessage key={msg.id} role={msg.role} content={msg.content} />
+              <ChatMessage key={msg.id} role={msg.role} content={msg.content} text_content={msg.text_content} />
             ))}
             {isLoading && messages.length > 0 && (
                <ChatMessage role="model" content={<div className="flex items-center gap-2"><Loader2 className="h-5 w-5 animate-spin" /><span>L'assistant réfléchit...</span></div>} />
