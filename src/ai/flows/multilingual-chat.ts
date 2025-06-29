@@ -50,17 +50,30 @@ const multilingualChatFlow = ai.defineFlow(
 
     const activeModel = input.model || 'googleai/gemini-2.0-flash';
     
-    // The history needs to be in the Genkit Message format.
+    // Create a new history array for the AI, in the format Genkit expects.
     const historyForAI: Message[] = input.messages.map(msg => ({
       role: msg.role,
       content: [{ text: msg.content }]
     }));
+    
+    // To work around the "system role not supported" error, we manually inject
+    // the instructions into the content of the very first user message.
+    const systemInstruction = "You are a helpful and friendly assistant. Always respond in French, regardless of the user's language.";
+    
+    // A valid conversation must start with a user message.
+    if (historyForAI.length > 0 && historyForAI[0].role === 'user') {
+      const firstUserMessage = historyForAI[0];
+      const originalContent = (firstUserMessage.content[0] as { text: string }).text;
+      
+      // Prepend the instruction to the original content. This happens on every call,
+      // but since the history is rebuilt from clean Firestore data each time, it's safe.
+      (firstUserMessage.content[0] as { text: string }).text = `${systemInstruction}\n\n---\n\n${originalContent}`;
+    }
 
     try {
       const genkitResponse = await ai.generate({
         model: activeModel,
-        system: 'You are a helpful and friendly assistant. Always respond in French, regardless of the user\'s language.',
-        history: historyForAI,
+        history: historyForAI, // Pass the modified history
         config: {
           temperature: 0.7,
         },
