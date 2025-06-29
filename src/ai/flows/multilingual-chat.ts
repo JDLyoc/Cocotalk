@@ -55,25 +55,11 @@ const multilingualChatFlow = ai.defineFlow(
       role: msg.role,
       content: [{ text: msg.content }]
     }));
-    
-    // To work around the "system role not supported" error, we manually inject
-    // the instructions into the content of the very first user message.
-    const systemInstruction = "You are a helpful and friendly assistant. Always respond in French, regardless of the user's language.";
-    
-    // A valid conversation must start with a user message.
-    if (historyForAI.length > 0 && historyForAI[0].role === 'user') {
-      const firstUserMessage = historyForAI[0];
-      const originalContent = (firstUserMessage.content[0] as { text: string }).text;
-      
-      // Prepend the instruction to the original content. This happens on every call,
-      // but since the history is rebuilt from clean Firestore data each time, it's safe.
-      (firstUserMessage.content[0] as { text: string }).text = `${systemInstruction}\n\n---\n\n${originalContent}`;
-    }
 
     try {
       const genkitResponse = await ai.generate({
         model: activeModel,
-        history: historyForAI, // Pass the modified history
+        history: historyForAI,
         config: {
           temperature: 0.7,
         },
@@ -81,7 +67,7 @@ const multilingualChatFlow = ai.defineFlow(
 
       const responseText = genkitResponse.text;
       if (!responseText) {
-        return { response: "Désolé, je n'ai pas pu générer de réponse." };
+        return { response: "Sorry, I was unable to generate a response." };
       }
 
       return { response: responseText };
