@@ -7,7 +7,7 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
+import { z } from 'zod';
 import type { Message } from 'genkit';
 import { searchWebTool } from '@/ai/tools/web-search';
 
@@ -126,7 +126,7 @@ const multilingualChatFlow = ai.defineFlow(
       } else if (error.message?.includes('quota') || error.message?.includes('rate limit')) {
         errorMessage = 'Le service est temporairement surchargé. Veuillez réessayer dans quelques instants.';
       } else if (error.message?.toLowerCase().includes('permission')) {
-        errorMessage = "Erreur de permission avec l'API Google AI. Assurez-vous que l'API 'Gemini' est activée dans votre projet Google Cloud et que la facturation (billing) est activée pour ce projet.";
+        errorMessage = "Erreur de permission avec l'API Google AI. Assurez-vous que l'API 'Gemini' est activée et que votre projet Google Cloud est bien associé à un compte de facturation actif. C'est une étape de configuration obligatoire sur la console Google Cloud.";
       }
 
 
