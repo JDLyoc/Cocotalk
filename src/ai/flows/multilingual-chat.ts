@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -32,16 +33,16 @@ export type MultilingualChatOutput = z.infer<typeof MultilingualChatOutputSchema
 
 
 function createSystemPrompt(persona?: string, rules?: string): string {
-  const defaultPersona = 'You are a helpful, knowledgeable, and friendly AI assistant.';
-  const defaultRules = 'Provide helpful, accurate, and contextually appropriate responses. Always respond in the same language as the user\'s message.';
+  const defaultPersona = 'Vous êtes un assistant IA serviable, compétent et amical.';
+  const defaultRules = 'Fournissez des réponses utiles, précises et adaptées au contexte. RÉPONDEZ TOUJOURS EN FRANÇAIS, quelle que soit la langue de l\'utilisateur.';
 
-  return `You are a powerful and flexible conversational AI assistant.
-Your behavior is defined by the following persona and rules. You MUST follow them carefully.
+  return `Vous êtes un assistant conversationnel IA puissant et flexible.
+Votre comportement est défini par la persona et les règles suivantes. Vous DEVEZ les suivre attentivement.
 
 ## Persona
 ${persona || defaultPersona}
 
-## Rules & Scenario
+## Règles & Scénario
 ${rules || defaultRules}
 `;
 }
@@ -67,7 +68,7 @@ const multilingualChatFlow = ai.defineFlow(
         return { error: "INVALID_ARGUMENT: Au moins un message est requis pour démarrer une conversation." };
       }
 
-      const systemPrompt = (persona || rules) ? createSystemPrompt(persona, rules) : undefined;
+      const systemPrompt = (persona || rules) ? createSystemPrompt(persona, rules) : createSystemPrompt();
       
       const genkitMessages: Message[] = messages.map(msg => ({
           role: msg.role as 'user' | 'model' | 'tool',
@@ -125,6 +126,8 @@ const multilingualChatFlow = ai.defineFlow(
 4. Mauvais projet sélectionné : Vérifiez que le projet affiché en haut de la console Google Cloud est bien le bon.`;
       } else if (error.message?.includes('quota') || error.message?.includes('rate limit')) {
         errorMessage = 'Le service est temporairement surchargé. Veuillez réessayer dans quelques instants.';
+      } else if (error.message?.includes('Schema validation failed')) {
+        errorMessage = `Une erreur de validation des données est survenue, indiquant une incohérence entre les données envoyées et le format attendu par l'IA. Détails: ${error.message}`;
       }
 
       return { error: errorMessage };
