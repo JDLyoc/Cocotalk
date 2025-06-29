@@ -56,19 +56,16 @@ export async function invokeAiChat(
       model: model,
     };
 
+    // The Genkit flow now handles its own internal errors and returns a structured response.
     const result = await multilingualChat(aiInput);
 
     return result;
   } catch (error: any) {
-    console.error('Error in invokeAiChat server action:', error);
-    
-    let errorMessage = `Une erreur inattendue est survenue: ${error.message}`;
-    if (error.message?.toLowerCase().includes('permission')) {
-      errorMessage = "Erreur de permission. Vérifiez les points suivants sur la console Google Cloud : 1) Assurez-vous d'avoir sélectionné le bon projet en haut de la page. 2) Activez l'API 'Gemini' pour ce projet. 3) Vérifiez que le projet est bien associé à un compte de facturation actif.";
-    }
-    
+    console.error('Critical error in invokeAiChat server action:', error);
+    // This catch block is for unexpected, catastrophic errors, not regular AI errors
+    // which are handled gracefully inside the Genkit flow itself.
     return {
-      error: errorMessage,
+      error: `Une erreur critique et inattendue est survenue: ${error.message}`,
     };
   }
 }
