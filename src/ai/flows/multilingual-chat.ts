@@ -7,6 +7,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
+import { searchWebTool } from '@/ai/tools/web-search';
 
 // Define the shape of a single message for input validation
 const MessageSchema = z.object({
@@ -81,6 +82,7 @@ const multilingualChatFlow = ai.defineFlow(
       const genkitResponse = await ai.generate({
         model: activeModel,
         messages: messagesForGemini, // Utiliser messages, pas history
+        tools: [searchWebTool],
         config: {
           temperature: 0.7,
         },
@@ -136,7 +138,7 @@ function prepareMessagesForGemini(messages: MultilingualChatInput['messages'], p
   }
 
   // Instructions système intégrées dans le premier message utilisateur
-  const systemInstruction = `Your instructions: Respond in ${preferredLanguage}. Be a helpful and conversational assistant.`;
+  const systemInstruction = `Your instructions: Respond in ${preferredLanguage}. Be a helpful and conversational assistant. If the user asks a question that requires information from the internet (like news, articles, or current events), use the 'searchWeb' tool to find the answer.`;
   
   const preparedMessages: { role: 'user' | 'model'; content: { text: string }[] }[] = [];
   
