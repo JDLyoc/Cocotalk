@@ -165,7 +165,7 @@ function needsWebSearch(userMessage: string): boolean {
     'météo', 'weather', 'trafic', 'traffic', 'score', 'résultat',
     'élection', 'politique', 'bourse', 'crypto', 'bitcoin', 'stock',
     'covid', 'virus', 'épidémie', 'vaccination', 'statistiques',
-    'guerre', 'conflit', 'urgence', 'alerte', 'incident', 'rfi'
+    'guerre', 'conflit', 'urgence', 'alerte', 'incident'
   ];
 
   const timeKeywords = [
