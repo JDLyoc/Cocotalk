@@ -69,6 +69,8 @@ export default function SignUpPage() {
         description = 'Cette adresse e-mail est déjà utilisée par un autre compte.';
       } else if (error.code === 'auth/invalid-email') {
         description = "L'adresse e-mail n'est pas valide.";
+      } else if (error.code === 'auth/operation-not-allowed') {
+        description = "La connexion par e-mail/mot de passe n'est pas activée. Veuillez l'activer dans la console Firebase.";
       }
       toast({ variant: 'destructive', title: 'Erreur d\'inscription', description });
     } finally {

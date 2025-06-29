@@ -57,6 +57,9 @@ export default function LoginPage() {
           case 'auth/invalid-email':
             description = "L'adresse e-mail n'est pas valide.";
             break;
+          case 'auth/operation-not-allowed':
+            description = "La connexion par e-mail/mot de passe n'est pas activée. Veuillez l'activer dans la console Firebase.";
+            break;
         }
       }
       toast({ variant: 'destructive', title: 'Erreur de connexion', description });
