@@ -68,22 +68,26 @@ const multilingualChatFlow = ai.defineFlow(
         return { error: "INVALID_ARGUMENT: Au moins un message est requis pour démarrer une conversation." };
       }
 
-      const systemPrompt = (persona || rules) ? createSystemPrompt(persona, rules) : createSystemPrompt();
+      const systemPrompt = createSystemPrompt(persona, rules);
       
       const genkitMessages: Message[] = messages.map(msg => ({
           role: msg.role as 'user' | 'model' | 'tool',
           content: [{ text: msg.content }]
       }));
       
-      const historyForGenkit: Message[] = genkitMessages.slice(0, -1);
-      const lastMessage = genkitMessages[genkitMessages.length - 1];
-      const promptForGenkit = lastMessage.content;
+      // The history to be sent to the AI will be reconstructed with the system prompt at the beginning.
+      // This is a common pattern for models that do not support a dedicated 'system' role.
+      const historyWithSystemPrompt: Message[] = [
+        { role: 'user', content: [{ text: systemPrompt }] },
+        { role: 'model', content: [{ text: 'Oui, j\'ai bien compris. Je suivrai ces instructions.' }] },
+        ...genkitMessages
+      ];
 
+      // Since the entire conversation is now in the history, we pass it all in the 'history' parameter
+      // and remove the 'prompt' and 'system' parameters.
       const genkitResponse = await ai.generate({
         model: activeModel,
-        system: systemPrompt,
-        prompt: promptForGenkit,
-        history: historyForGenkit,
+        history: historyWithSystemPrompt,
         tools: [searchWebTool],
         toolChoice: 'auto',
         config: {
@@ -97,8 +101,8 @@ const multilingualChatFlow = ai.defineFlow(
         const toolOutputs = await Promise.all(toolCalls.map(ai.runTool));
         const finalResponse = await ai.generate({
           model: activeModel,
-          system: systemPrompt,
-          history: [...genkitMessages, genkitResponse.message, ...toolOutputs],
+          // We use the full history again, now with the tool call and its output added.
+          history: [...historyWithSystemPrompt, genkitResponse.message, ...toolOutputs],
           tools: [searchWebTool],
         });
         return { response: finalResponse.text };
