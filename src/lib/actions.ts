@@ -64,7 +64,7 @@ export async function invokeAiChat(
     
     let errorMessage = `Une erreur inattendue est survenue: ${error.message}`;
     if (error.message?.toLowerCase().includes('permission')) {
-      errorMessage = "Erreur de permission de l'API AI. Veuillez vérifier que l'API 'Generative Language' est activée dans votre projet Google Cloud et que vos identifiants disposent des autorisations nécessaires.";
+      errorMessage = "Erreur de permission de l'API AI. Assurez-vous que l'API 'Gemini' est activée sur votre projet Google Cloud et que la facturation (billing) est également activée pour ce projet.";
     }
     
     return {
