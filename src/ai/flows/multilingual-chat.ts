@@ -33,18 +33,25 @@ export type MultilingualChatOutput = z.infer<typeof MultilingualChatOutputSchema
 
 
 function createSystemPrompt(persona?: string, rules?: string): string {
-  const defaultPersona = 'Vous êtes un assistant IA serviable, compétent et amical.';
-  const defaultRules = 'Fournissez des réponses utiles, précises et adaptées au contexte. RÉPONDEZ TOUJOURS EN FRANÇAIS, quelle que soit la langue de l\'utilisateur.';
+  // Case 1: A Cocotalk is active (custom rules are provided).
+  if (rules) {
+    const fullRules = `${rules}\n\nIMPORTANT: Vous devez TOUJOURS répondre en FRANÇAIS, quelle que soit la langue de l'utilisateur.`;
+    const fullPersona = persona || 'Vous êtes un assistant IA serviable, compétent et amical.';
 
-  return `Vous êtes un assistant conversationnel IA puissant et flexible.
+    return `Vous êtes un assistant conversationnel IA puissant et flexible.
 Votre comportement est défini par la persona et les règles suivantes. Vous DEVEZ les suivre attentivement.
 
 ## Persona
-${persona || defaultPersona}
+${fullPersona}
 
 ## Règles & Scénario
-${rules || defaultRules}
+${fullRules}
 `;
+  }
+
+  // Case 2: Standard chat (no custom rules).
+  // We use a very basic system prompt that only sets the language and a basic persona.
+  return `Vous êtes un assistant IA serviable, compétent et amical. RÉPONDEZ TOUJOURS EN FRANÇAIS, quelle que soit la langue de l'utilisateur.`;
 }
 
 
