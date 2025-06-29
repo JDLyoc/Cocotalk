@@ -11,7 +11,7 @@ import { searchWebTool } from '@/ai/tools/web-search';
 
 // Define the shape of a single message for input validation
 const MessageSchema = z.object({
-  role: z.enum(['user', 'model']), // Seulement user et model pour Gemini
+  role: z.enum(['user', 'model']), // Only user and model for Gemini
   content: z.string().min(1, 'Message content cannot be empty'),
 });
 
@@ -56,7 +56,6 @@ const multilingualChatFlow = ai.defineFlow(
   },
   async (input) => {
     try {
-      // Double vérification des messages
       if (!input.messages || input.messages.length === 0) {
         return { 
           error: 'No messages provided to the AI. Please send at least one message.', 
@@ -67,34 +66,29 @@ const multilingualChatFlow = ai.defineFlow(
       const activeModel = input.model || 'googleai/gemini-1.5-flash-latest';
       const preferredLanguage = input.language || 'the same language as the user';
       
-      // Préparer les messages pour Gemini (PAS de rôle system)
-      const messagesForGemini = prepareMessagesForGemini(input.messages, preferredLanguage);
+      const systemPrompt = `You are a helpful and conversational assistant. Respond in ${preferredLanguage}. If the user asks a question that requires information from the internet (like news, articles, or current events), use the 'searchWeb' tool to find the answer.`;
       
-      // Vérifier qu'on a des messages valides
-      if (!messagesForGemini || messagesForGemini.length === 0) {
-        return { 
-          error: 'No valid messages could be prepared for the AI.', 
-          success: false 
-        };
-      }
+      // Directly map messages to the format Genkit expects for Gemini.
+      const messagesForGemini = input.messages.map(msg => ({
+          role: msg.role,
+          content: [{ text: msg.content }]
+      }));
 
-      // Appel à l'API Gemini
       const genkitResponse = await ai.generate({
         model: activeModel,
-        messages: messagesForGemini, // Utiliser messages, pas history
+        system: systemPrompt, // Use the dedicated system prompt field, this is the correct way.
+        messages: messagesForGemini,
         tools: [searchWebTool],
         config: {
           temperature: 0.7,
         },
       });
 
-
-      // Extraire le texte de la réponse
       const responseText = genkitResponse.text;
       
       if (!responseText || responseText.trim().length === 0) {
         return { 
-          response: "Désolé, la réponse générée était vide. Pouvez-vous reformuler votre question ?", 
+          response: "Sorry, the generated response was empty. Can you rephrase your question?", 
           success: true 
         };
       }
@@ -107,20 +101,20 @@ const multilingualChatFlow = ai.defineFlow(
     } catch (error: any) {
       console.error('❌ Critical error in multilingualChatFlow:', error);
       
-      let errorMessage = 'Une erreur inattendue s\'est produite.';
+      let errorMessage = 'An unexpected error occurred.';
       
       if (error.message?.includes('API key') || error.message?.includes('authentication')) {
-        errorMessage = 'Problème d\'authentification. Vérifiez votre clé API Google dans GOOGLE_API_KEY.';
+        errorMessage = 'Authentication issue. Check your Google API key in GOOGLE_API_KEY.';
       } else if (error.message?.includes('quota') || error.message?.includes('rate limit')) {
-        errorMessage = 'Quota API dépassé. Veuillez réessayer plus tard.';
+        errorMessage = 'API quota exceeded. Please try again later.';
       } else if (error.message?.includes('model') || error.message?.includes('not found')) {
-        errorMessage = `Modèle "${input.model || 'default'}" non disponible.`;
+        errorMessage = `Model "${input.model || 'default'}" is not available.`;
       } else if (error.message?.includes('at least one message')) {
-        errorMessage = 'Aucun message valide n\'a été envoyé à l\'IA.';
+        errorMessage = 'No valid messages were sent to the AI.';
       } else if (error.message?.includes('system role')) {
-        errorMessage = 'Erreur de configuration des rôles. Le modèle ne supporte pas le rôle system.';
+        errorMessage = 'Role configuration error. The model does not support the system role in the message list.';
       } else {
-        errorMessage = `Erreur technique: ${error.message}`;
+        errorMessage = `Technical error: ${error.message}`;
       }
       
       return { 
@@ -130,47 +124,3 @@ const multilingualChatFlow = ai.defineFlow(
     }
   }
 );
-
-// Fonction pour préparer les messages spécifiquement pour Gemini
-function prepareMessagesForGemini(messages: MultilingualChatInput['messages'], preferredLanguage: string) {
-  if (!messages || messages.length === 0) {
-    return [];
-  }
-
-  // Instructions système intégrées dans le premier message utilisateur
-  const systemInstruction = `Your instructions: Respond in ${preferredLanguage}. Be a helpful and conversational assistant. If the user asks a question that requires information from the internet (like news, articles, or current events), use the 'searchWeb' tool to find the answer.`;
-  
-  const preparedMessages: { role: 'user' | 'model'; content: { text: string }[] }[] = [];
-  
-  messages.forEach((msg, index) => {
-    if (!msg.content || msg.content.trim().length === 0) {
-      return;
-    }
-
-    let content = msg.content.trim();
-    
-    // Ajouter les instructions au premier message utilisateur
-    if (index === 0 && msg.role === 'user') {
-      content = `${systemInstruction}\n\n---\n\n${content}`;
-    }
-    
-    preparedMessages.push({
-      role: msg.role,
-      content: [{ text: content }]
-    });
-  });
-  
-  // If the first message was not from a user, inject instructions differently
-  if (messages[0].role !== 'user') {
-    preparedMessages.unshift({
-        role: 'user',
-        content: [{ text: systemInstruction + "\n\n---\n\nLet's start." }],
-    });
-    preparedMessages.push({
-        role: 'model',
-        content: [{ text: "Understood. I will follow these instructions. How can I help you?" }]
-    });
-  }
-
-  return preparedMessages;
-}
