@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -56,16 +57,17 @@ const multilingualChatFlow = ai.defineFlow(
       const activeModel = input.model || 'googleai/gemini-1.5-flash-latest';
       const preferredLanguage = input.language || 'the user\'s language';
 
-      // Prepare messages with system instructions for Gemini
-      const messagesForGemini = prepareMessages(
-        input.messages, 
-        preferredLanguage
-      );
+      // System instruction now includes the model name
+      const system = `You are a helpful and conversational assistant running on the ${activeModel} model. Please respond in ${preferredLanguage}. When asked what model you are, you must state the model name clearly.`;
       
-      // Call the Gemini API
+      // Call the Gemini API using the 'system' parameter for instructions
       const genkitResponse = await ai.generate({
         model: activeModel,
-        messages: messagesForGemini,
+        system: system, 
+        messages: input.messages.map(msg => ({
+            role: msg.role,
+            content: [{ text: msg.content }]
+        })),
         config: {
           temperature: 0.7,
         },
@@ -96,39 +98,6 @@ const multilingualChatFlow = ai.defineFlow(
     }
   }
 );
-
-
-// Helper to prepare messages with system instructions
-function prepareMessages(
-  messages: MultilingualChatInput['messages'], 
-  preferredLanguage: string
-) {
-  const systemInstruction = `You are a helpful and conversational assistant. Please respond in ${preferredLanguage}.`;
-  
-  const preparedMessages: any[] = [];
-  
-  messages.forEach((msg, index) => {
-    // Skip empty messages
-    if (!msg.content || msg.content.trim().length === 0) {
-      return;
-    }
-
-    let content = msg.content.trim();
-    
-    // Prepend instructions to the first user message
-    if (index === 0 && msg.role === 'user') {
-      content = `System instruction: You are a helpful and conversational assistant. Please respond in ${preferredLanguage}.\n\n---\n\nUser's question: "${content}"`;
-    }
-    
-    preparedMessages.push({
-      role: msg.role,
-      content: [{ text: content }] // Format for multi-modal compatibility
-    });
-  });
-  
-  return preparedMessages;
-}
-
 
 // Utility to safely extract text from the AI response
 function extractResponseText(genkitResponse: any): string {
