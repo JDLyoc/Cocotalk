@@ -49,7 +49,7 @@ const multilingualChatFlow = ai.defineFlow(
       const activeModel = model || 'googleai/gemini-2.0-flash';
       
       if (!messages || messages.length === 0) {
-        return { error: "INVALID_ARGUMENT: Au moins un message est requis pour démarrer une conversation." };
+        return { error: "INVALID_ARGUMENT: At least one message is required to start a conversation." };
       }
       
       const genkitMessages: Message[] = messages.map(msg => ({
@@ -57,39 +57,27 @@ const multilingualChatFlow = ai.defineFlow(
           content: [{ text: msg.content }]
       }));
       
-      let historyForAI: Message[];
-      
-      // Determine the system prompt based on whether it's a standard chat or a Cocotalk
+      let historyForAI: Message[] = genkitMessages;
+
+      // Logic for Cocotalk with persona and rules
       if (rules) {
-        // Cocotalk: Inject persona and rules as a system message.
-        const fullPersona = persona || 'Vous êtes un assistant IA serviable, compétent et amical.';
-        const systemPrompt = `Vous êtes un assistant conversationnel IA puissant et flexible.
-Votre comportement est défini par la persona et les règles suivantes. Vous DEVEZ les suivre attentivement.
+        const fullPersona = persona || 'You are a helpful, knowledgeable, and friendly AI assistant.';
+        const systemPrompt = `You are a powerful and flexible conversational AI assistant.
+Your behavior is defined by the following persona and rules. You MUST follow them carefully.
 
 ## Persona
 ${fullPersona}
 
-## Règles & Scénario
-${rules}
-
-IMPORTANT: Vous devez TOUJOURS répondre en FRANÇAIS, quelle que soit la langue de l'utilisateur.`;
-
+## Rules & Scenario
+${rules}`;
+        // Prepend the system instructions as a user/model pair to guide the AI
         historyForAI = [
           { role: 'user', content: [{ text: systemPrompt }] },
-          { role: 'model', content: [{ text: "Oui, j'ai bien compris. Je suivrai ces instructions." }] },
+          { role: 'model', content: [{ text: "Yes, I understand. I will follow these instructions." }] },
           ...genkitMessages
         ];
-      } else {
-        // Standard Chat: Just add the "always French" instruction to the first user message.
-        const firstUserMessage = genkitMessages[0];
-        const instruction = "RÉPONDEZ TOUJOURS EN FRANÇAIS, quelle que soit la langue de l'utilisateur.\n\n";
-        
-        firstUserMessage.content[0].text = instruction + firstUserMessage.content[0].text;
-        
-        historyForAI = genkitMessages;
       }
       
-
       const genkitResponse = await ai.generate({
         model: activeModel,
         history: historyForAI,
@@ -114,7 +102,7 @@ IMPORTANT: Vous devez TOUJOURS répondre en FRANÇAIS, quelle que soit la langue
       
       const responseText = genkitResponse.text;
       if (!responseText) {
-          return { response: "Désolé, je n'ai pas pu générer une réponse." };
+          return { response: "Sorry, I couldn't generate a response." };
       }
 
       return { response: responseText };
@@ -123,19 +111,19 @@ IMPORTANT: Vous devez TOUJOURS répondre en FRANÇAIS, quelle que soit la langue
     {
       console.error('Critical error in multilingualChatFlow:', error);
       
-      let errorMessage = `Une erreur est survenue: ${error.message}`;
+      let errorMessage = `An error occurred: ${error.message}`;
       if (error.message?.includes('API key not valid')) {
-        errorMessage = `La clé API Google est invalide. Veuillez vérifier la variable GOOGLE_API_KEY dans votre fichier .env.`;
+        errorMessage = `The Google API key is invalid. Please check the GOOGLE_API_KEY variable in your .env file.`;
       } else if (error.message?.includes('permission') || error.message?.includes('denied')) {
-        errorMessage = `Erreur de permission. Causes probables :
-1. Restrictions sur la clé API : Dans la console Google Cloud > API et services > Identifiants > [Votre Clé API], assurez-vous que "Restrictions relatives aux applications" est sur "Aucun" ET que "Restrictions relatives aux API" est sur "Ne pas restreindre la clé".
-2. API non activée : Vérifiez que l'API "Gemini" est bien activée pour ce projet.
-3. Facturation non liée : Assurez-vous que la facturation est activée et liée à ce projet.
-4. Mauvais projet sélectionné : Vérifiez que le projet affiché en haut de la console Google Cloud est bien le bon.`;
+        errorMessage = `Permission error. Likely causes:
+1. API Key Restrictions: In Google Cloud Console > APIs & Services > Credentials > [Your API Key], ensure "Application restrictions" is "None" AND "API restrictions" is "Don't restrict key".
+2. API Not Enabled: Ensure the "Gemini API" is enabled for this project.
+3. Billing Not Linked: Ensure billing is enabled and linked to this project.
+4. Wrong Project: Ensure the project at the top of the Google Cloud Console is the correct one.`;
       } else if (error.message?.includes('quota') || error.message?.includes('rate limit')) {
-        errorMessage = 'Le service est temporairement surchargé. Veuillez réessayer dans quelques instants.';
+        errorMessage = 'The service is temporarily overloaded. Please try again in a moment.';
       } else if (error.message?.includes('Schema validation failed')) {
-        errorMessage = `Une erreur de validation des données est survenue, indiquant une incohérence entre les données envoyées et le format attendu par l'IA. Détails: ${error.message}`;
+        errorMessage = `A data validation error occurred, indicating a mismatch between the data sent and the format expected by the AI. Details: ${error.message}`;
       }
 
       return { error: errorMessage };
