@@ -118,10 +118,11 @@ const multilingualChatFlow = ai.defineFlow(
       if (error.message?.includes('API key not valid')) {
         errorMessage = `La clé API Google est invalide. Veuillez vérifier la variable GOOGLE_API_KEY dans votre fichier .env.`;
       } else if (error.message?.includes('permission') || error.message?.includes('denied')) {
-        errorMessage = `Erreur de permission. La cause la plus probable est une restriction sur votre clé API.
-Allez dans la console Google Cloud > API et services > Identifiants.
-Cliquez sur votre clé API et dans "Restrictions d'application", sélectionnez "Aucune".
-Vérifiez aussi que l'API "Gemini" est activée et que la facturation est liée au projet.`;
+        errorMessage = `Erreur de permission. Causes probables :
+1. Restrictions sur la clé API : Dans la console Google Cloud > API et services > Identifiants > [Votre Clé API], assurez-vous que "Restrictions relatives aux applications" est sur "Aucun" ET que "Restrictions relatives aux API" est sur "Ne pas restreindre la clé".
+2. API non activée : Vérifiez que l'API "Gemini" est bien activée pour ce projet.
+3. Facturation non liée : Assurez-vous que la facturation est activée et liée à ce projet.
+4. Mauvais projet sélectionné : Vérifiez que le projet affiché en haut de la console Google Cloud est bien le bon.`;
       } else if (error.message?.includes('quota') || error.message?.includes('rate limit')) {
         errorMessage = 'Le service est temporairement surchargé. Veuillez réessayer dans quelques instants.';
       }
