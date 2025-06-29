@@ -60,19 +60,25 @@ const multilingualChatFlow = ai.defineFlow(
       // System instruction now includes the model name
       const systemInstruction = `You are a helpful and conversational assistant running on the ${activeModel} model. Please respond in ${preferredLanguage}. When asked what model you are, you must state the model name clearly.`;
       
-      // Prepend the system instruction to the first user message for universal compatibility
-      const messagesWithInstruction = [...input.messages];
-      if (messagesWithInstruction.length > 0 && messagesWithInstruction[0].role === 'user') {
-        messagesWithInstruction[0] = {
-          ...messagesWithInstruction[0],
-          content: `${systemInstruction}\n\n---\n\n${messagesWithInstruction[0].content}`,
-        };
+      // Create a temporary copy of messages for the API call to avoid mutating the original data
+      const messagesWithInstruction = JSON.parse(JSON.stringify(input.messages));
+
+      // Find the last user message to prepend the instruction
+      const lastUserMessageIndex = messagesWithInstruction.findLastIndex((msg: { role: string; }) => msg.role === 'user');
+
+      if (lastUserMessageIndex !== -1) {
+        const lastUserMessage = messagesWithInstruction[lastUserMessageIndex];
+        lastUserMessage.content = `${systemInstruction}\n\n---\n\n${lastUserMessage.content}`;
+      } else if (messagesWithInstruction.length > 0) {
+        // Fallback for cases with no user message (should be rare)
+        // We'll prepend to the very first message
+         messagesWithInstruction[0].content = `${systemInstruction}\n\n---\n\n${messagesWithInstruction[0].content}`;
       }
       
       // Call the Gemini API 
       const genkitResponse = await ai.generate({
         model: activeModel,
-        messages: messagesWithInstruction.map(msg => ({
+        messages: messagesWithInstruction.map((msg: { role: "user" | "model"; content: any; }) => ({
             role: msg.role,
             content: [{ text: msg.content }]
         })),
