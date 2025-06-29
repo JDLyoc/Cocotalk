@@ -57,8 +57,8 @@ const multilingualChatFlow = ai.defineFlow(
       const activeModel = input.model || 'googleai/gemini-1.5-flash-latest';
       const preferredLanguage = input.language || 'the user\'s language';
 
-      // System instruction now includes the model name
-      const systemInstruction = `You are a helpful and conversational assistant running on the ${activeModel} model. Please respond in ${preferredLanguage}. When asked what model you are, you must state the model name clearly.`;
+      // System instruction now includes the model name and a condition
+      const systemInstruction = `You are a helpful and conversational assistant running on the ${activeModel} model. Please respond in ${preferredLanguage}. Only state which model you are if the user asks you directly.`;
       
       // Create a temporary copy of messages for the API call to avoid mutating the original data
       const messagesWithInstruction = JSON.parse(JSON.stringify(input.messages));
