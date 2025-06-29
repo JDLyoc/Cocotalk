@@ -45,6 +45,7 @@ interface AppSidebarProps {
   createNewChat: () => void;
   onDeleteConversation: (id: string) => void;
   onRenameConversation: (id: string, newTitle: string) => void;
+  onConversationSelect?: () => void;
 }
 
 export function AppSidebar({
@@ -54,6 +55,7 @@ export function AppSidebar({
   createNewChat,
   onDeleteConversation,
   onRenameConversation,
+  onConversationSelect,
 }: AppSidebarProps) {
   const router = useRouter();
   const [renameTarget, setRenameTarget] = React.useState<DisplayConversation | null>(null);
@@ -80,9 +82,9 @@ export function AppSidebar({
 
   return (
     <>
-      <aside className="flex h-full w-full max-w-[280px] flex-col bg-sidebar text-sidebar-foreground p-4">
+      <div className="flex h-full w-full flex-col bg-sidebar text-sidebar-foreground p-4">
         <div className="space-y-2 mb-4">
-          <Button size="lg" className="w-full justify-center font-semibold bg-accent text-accent-foreground hover:bg-accent/90 rounded-lg" onClick={createNewChat}>
+          <Button size="lg" className="w-full justify-center font-semibold bg-accent text-accent-foreground hover:bg-accent/90 rounded-lg" onClick={() => { createNewChat(); onConversationSelect?.(); }}>
             <Sparkles className="mr-2 h-4 w-4" />
             Nouveau Chat
           </Button>
@@ -102,7 +104,7 @@ export function AppSidebar({
                             <Button
                             variant={conv.id === activeConversationId ? "secondary" : "ghost"}
                             className="w-full justify-start font-normal rounded-lg pr-10"
-                            onClick={() => setActiveConversationId(conv.id)}
+                            onClick={() => { setActiveConversationId(conv.id); onConversationSelect?.(); }}
                             >
                             <MessageSquare className="mr-2 h-4 w-4 flex-shrink-0" />
                             <span className="truncate">{conv.title}</span>
@@ -160,7 +162,7 @@ export function AppSidebar({
               <span className="font-medium">Se déconnecter</span>
           </Button>
         </div>
-      </aside>
+      </div>
 
       <Dialog open={!!renameTarget} onOpenChange={(open) => !open && setRenameTarget(null)}>
         <DialogContent>

@@ -31,6 +31,7 @@ import type {
   DisplayMessage,
   DisplayConversation,
 } from "@/lib/types";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 
 function AppSkeleton() {
     return (
@@ -78,6 +79,7 @@ export default function Home() {
   const [isAuthReady, setIsAuthReady] = React.useState(false);
   const [isDataLoading, setIsDataLoading] = React.useState(true);
   const [currentUser, setCurrentUser] = React.useState<User | null>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
   
@@ -323,16 +325,35 @@ export default function Home() {
 
   return (
     <div className="flex flex-col h-screen w-full bg-background overflow-hidden">
-      <AppHeader />
+      <AppHeader onMenuClick={() => setIsSidebarOpen(true)} />
       <div className="flex flex-1 overflow-hidden">
-        <AppSidebar
-          conversations={displayConversations}
-          activeConversationId={activeConversationId}
-          setActiveConversationId={selectConversation}
-          createNewChat={createNewChat}
-          onDeleteConversation={handleDeleteConversation}
-          onRenameConversation={handleRenameConversation}
-        />
+        {/* Mobile Sidebar */}
+        <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
+            <SheetContent side="left" className="p-0 w-[280px] md:hidden">
+                <AppSidebar
+                  conversations={displayConversations}
+                  activeConversationId={activeConversationId}
+                  setActiveConversationId={selectConversation}
+                  createNewChat={createNewChat}
+                  onDeleteConversation={handleDeleteConversation}
+                  onRenameConversation={handleRenameConversation}
+                  onConversationSelect={() => setIsSidebarOpen(false)}
+                />
+            </SheetContent>
+        </Sheet>
+
+        {/* Desktop Sidebar */}
+        <aside className="hidden md:flex w-full max-w-[280px]">
+          <AppSidebar
+            conversations={displayConversations}
+            activeConversationId={activeConversationId}
+            setActiveConversationId={selectConversation}
+            createNewChat={createNewChat}
+            onDeleteConversation={handleDeleteConversation}
+            onRenameConversation={handleRenameConversation}
+          />
+        </aside>
+        
         <main className="flex flex-1 flex-col">
           {activeDisplayConversation ? (
             <ChatPanel
