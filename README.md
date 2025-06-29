@@ -6,7 +6,7 @@ To get started, take a look at src/app/page.tsx.
 
 ## Environment Variable Setup
 
-This project uses a `.env` file to store secret keys for Firebase, Google AI, and Web Search services.
+This project uses a `.env` file to store secret keys for Firebase and Google AI services.
 
 ### Firebase Setup (Authentication, Database, Storage)
 
@@ -40,25 +40,5 @@ The app's AI features require a separate API key and configuration in the Google
     *   For development, it's recommended to temporarily remove all restrictions from the key to ensure it works, and add them back later if needed.
 
 4.  **Set Google AI Variable:** Copy the new API key and paste it as the value for `GOOGLE_API_KEY` in your `.env` file.
-
-### Web Search Setup (Optional)
-
-The chat can perform live web searches for recent information. This requires a third-party API key. You only need to configure **one** of the following services. Serper is recommended as it has a generous free tier.
-
--   **Option 1 (Recommended): Serper API**
-    1.  Go to [serper.dev](https://serper.dev/) and sign up for a free account.
-    2.  Find your API key in your dashboard.
-    3.  Add it to your `.env` file: `SERPER_API_KEY="your_serper_key"`
-
--   **Option 2: Brave Search API**
-    1.  Go to [brave.com/search/api/](https://brave.com/search/api/) and get a key.
-    2.  Add it to your `.env` file: `BRAVE_API_KEY="your_brave_key"`
-
--   **Option 3: Google Custom Search API**
-    1.  This is more complex to set up. You need a Google API Key (you can use the same one as for Gemini) and a "Programmable Search Engine ID".
-    2.  Follow the instructions [here](https://developers.google.com/custom-search/v1/overview) to create a search engine.
-    3.  Add both to your `.env` file:
-        `GOOGLE_SEARCH_API_KEY="your_google_api_key"`
-        `GOOGLE_SEARCH_ENGINE_ID="your_search_engine_id"`
 
 Once all variables in `.env` are set, restart your development server for the changes to take effect.

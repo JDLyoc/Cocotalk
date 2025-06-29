@@ -7,7 +7,6 @@ import {
 } from '@/ai/flows/multilingual-chat';
 import type { StoredMessage } from './types';
 import type { AvailableModel } from '@/contexts/model-context';
-import type { MultilingualChatInput as ChatInputType } from '@/ai/flows/multilingual-chat';
 
 interface InvokeAiChatInput {
   historyWithNewMessage: StoredMessage[];
@@ -25,7 +24,7 @@ export async function invokeAiChat(
 ): Promise<UICompatibleOutput> {
   const { historyWithNewMessage, model } = input;
 
-  const messagesForFlow: ChatInputType['messages'] = historyWithNewMessage.map(
+  const messagesForFlow: MultilingualChatInput['messages'] = historyWithNewMessage.map(
     (msg: StoredMessage) => ({
       role: msg.role,
       content: msg.content,
@@ -40,7 +39,7 @@ export async function invokeAiChat(
 
   const result = await multilingualChat(aiInput);
 
-  // Adapt the new flow's output to the format expected by the UI
+  // Adapt the flow's output to the format expected by the UI
   if (result.success) {
     return { response: result.response };
   } else {
