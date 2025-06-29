@@ -82,8 +82,6 @@ export function ChatMessage({ role, content, text_content }: Omit<DisplayMessage
         </Avatar>
       )}
 
-      {isUser && <CopyButton />}
-
       <div
         className={cn(
           "max-w-md rounded-lg p-3 text-sm",
@@ -95,7 +93,7 @@ export function ChatMessage({ role, content, text_content }: Omit<DisplayMessage
         <div className="prose prose-sm max-w-none text-current break-words">{content}</div>
       </div>
 
-      {!isUser && <CopyButton />}
+      <CopyButton />
 
       {isUser && (
         <Avatar className="h-9 w-9 border">
