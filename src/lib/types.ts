@@ -27,20 +27,6 @@ export interface StoredConversation {
   messages: StoredMessage[];
   createdAt: Timestamp;
   userId: string;
-  cocotalkOriginId?: string;
-}
-
-// Interface for custom assistants (Cocotalks)
-export interface StoredCocotalk {
-  id: string;
-  title: string;
-  description: string;
-  persona?: string;
-  instructions: string;
-  starterMessage: string;
-  greetingMessage?: string;
-  createdAt: Timestamp;
-  userId: string;
 }
 
 // Interface for conversations passed to components

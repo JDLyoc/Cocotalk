@@ -3,8 +3,7 @@
 
 /**
  * @fileOverview A generic, instruction-driven, multilingual chat AI agent.
- * This agent can adopt any persona and follow any conversational scenario
- * defined in the user-provided instructions. It can also use tools like web search.
+ * This agent can use tools like web search.
  */
 
 import { ai } from '@/ai/genkit';
@@ -19,8 +18,6 @@ const MessageSchema = z.object({
 
 const MultilingualChatInputSchema = z.object({
   messages: z.array(MessageSchema).describe('The entire conversation history, from oldest to newest.'),
-  persona: z.string().optional().describe('The persona the assistant should adopt.'),
-  rules: z.string().optional().describe('The user-defined scenario, rules, and instructions the agent must follow.'),
   model: z.string().optional().describe('The specific AI model to use for the generation.'),
 });
 export type MultilingualChatInput = z.infer<typeof MultilingualChatInputSchema>;
@@ -45,34 +42,15 @@ const multilingualChatFlow = ai.defineFlow(
   },
   async (input) => {
     try {
-      const { messages, persona, rules, model } = input;
+      const { messages, model } = input;
       const activeModel = model || 'googleai/gemini-2.0-flash';
       
-      // Guard against empty input, this is critical.
       if (!messages || messages.length === 0) {
         return { error: "INVALID_ARGUMENT: Conversation history cannot be empty." };
       }
       
-      // Build the history for the AI in a robust way.
       const historyForAI: Message[] = [];
       
-      // Step 1: Add system instructions via a few-shot prompt if it's a Cocotalk.
-      if (rules) {
-        const fullPersona = persona || 'You are a helpful, knowledgeable, and friendly AI assistant.';
-        const systemPrompt = `You are a powerful and flexible conversational AI assistant.
-Your behavior is defined by the following persona and rules. You MUST follow them carefully.
-
-## Persona
-${fullPersona}
-
-## Rules & Scenario
-${rules}`;
-        
-        historyForAI.push({ role: 'user', content: [{ text: systemPrompt }] });
-        historyForAI.push({ role: 'model', content: [{ text: "Yes, I understand. I will follow these instructions." }] });
-      }
-      
-      // Step 2: Add the actual conversation history.
       messages.forEach(msg => {
         historyForAI.push({
           role: msg.role as 'user' | 'model' | 'tool',
@@ -104,7 +82,7 @@ ${rules}`;
       
       const responseText = genkitResponse.text;
       if (!responseText) {
-          return { response: "Sorry, I couldn't generate a response." };
+          return { response: "Désolé, je n'ai pas pu générer de réponse." };
       }
 
       return { response: responseText };

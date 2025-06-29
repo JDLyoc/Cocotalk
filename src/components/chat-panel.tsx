@@ -2,12 +2,12 @@
 "use client";
 
 import * as React from "react";
-import { Paperclip, Send, Loader2, MessageSquare, FileUp, ScanSearch, Sparkles, ArrowDown } from "lucide-react";
+import { Paperclip, Send, Loader2, MessageSquare, FileUp, ScanSearch, ArrowDown } from "lucide-react";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { ScrollArea } from "./ui/scroll-area";
 import { ChatMessage } from "./chat-message";
-import type { DisplayMessage, StoredCocotalk } from "@/app/page";
+import type { DisplayMessage } from "@/app/page";
 import { useToast } from "@/hooks/use-toast";
 import {
   DropdownMenu,
@@ -22,7 +22,6 @@ interface ChatPanelProps {
   onSendMessage: (text: string, file: File | null) => void;
   isLoading: boolean;
   isWelcomeMode?: boolean;
-  activeCocotalk?: StoredCocotalk | null;
 }
 
 function WelcomeScreen() {
@@ -39,26 +38,7 @@ function WelcomeScreen() {
     );
 }
 
-function CocotalkWelcomeScreen({ cocotalk, onStarterClick }: { cocotalk: StoredCocotalk; onStarterClick: (text: string) => void; }) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center bg-background text-center p-4">
-        <div className="p-4 rounded-full mb-4">
-          <Sparkles className="h-16 w-16 text-accent" />
-        </div>
-        <h2 className="text-3xl font-semibold">{cocotalk.title}</h2>
-        <p className="text-muted-foreground mt-2 max-w-md">
-          {cocotalk.description}
-        </p>
-        {cocotalk.starterMessage && (
-            <Button variant="outline" className="mt-6" onClick={() => onStarterClick(cocotalk.starterMessage)}>
-                {cocotalk.starterMessage}
-            </Button>
-        )}
-      </div>
-    );
-}
-
-export function ChatPanel({ messages, onSendMessage, isLoading, isWelcomeMode = false, activeCocotalk = null }: ChatPanelProps) {
+export function ChatPanel({ messages, onSendMessage, isLoading, isWelcomeMode = false }: ChatPanelProps) {
   const [text, setText] = React.useState("");
   const [file, setFile] = React.useState<File | null>(null);
   const docFileInputRef = React.useRef<HTMLInputElement>(null);
@@ -141,22 +121,16 @@ export function ChatPanel({ messages, onSendMessage, isLoading, isWelcomeMode = 
     }
   };
 
-  const handleStarterClick = (starter: string) => {
-    setText(starter);
-  };
-
   const docTypes = "application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain";
   const imageTypes = "image/jpeg,image/png,image/webp,image/gif";
 
   const showWelcome = isWelcomeMode && messages.length === 0;
-  const showCocotalkWelcome = activeCocotalk && messages.length <= 1 && !messages.some(m => m.role === 'user');
 
   return (
     <div className="flex h-full flex-col">
       <div className="relative flex-1 overflow-hidden">
         <ScrollArea className="h-full p-4" ref={scrollAreaRef}>
           {showWelcome && <WelcomeScreen />}
-          {showCocotalkWelcome && <CocotalkWelcomeScreen cocotalk={activeCocotalk} onStarterClick={handleStarterClick} />}
           
           <div className="space-y-6">
             {messages.map((msg) => (

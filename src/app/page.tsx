@@ -28,11 +28,9 @@ import {
 import type {
   StoredMessage,
   StoredConversation,
-  StoredCocotalk,
   DisplayMessage,
   DisplayConversation,
 } from "@/lib/types";
-import type { CocotalkFormValues } from "@/components/cocotalk-form";
 
 function AppSkeleton() {
     return (
@@ -48,7 +46,6 @@ function AppSkeleton() {
             </header>
             <div className="flex flex-1 overflow-hidden">
                 <aside className="flex h-full w-full max-w-[280px] flex-col bg-sidebar text-sidebar-foreground p-4">
-                    <Skeleton className="h-11 w-full mb-4" />
                     <Skeleton className="h-11 w-full mb-4" />
                     <Skeleton className="h-6 w-3/4 mb-4" />
                     <div className="space-y-1">
@@ -76,8 +73,6 @@ export default function Home() {
   
   const [conversations, setConversations] = React.useState<StoredConversation[]>([]);
   const [activeConversationId, setActiveConversationId] = React.useState<string | null>(null);
-  const [cocotalks, setCocotalks] = React.useState<StoredCocotalk[]>([]);
-  const [activeCocotalkId, setActiveCocotalkId] = React.useState<string | null>(null);
 
   const [isLoading, setIsLoading] = React.useState(false);
   const [isAuthReady, setIsAuthReady] = React.useState(false);
@@ -85,7 +80,6 @@ export default function Home() {
   const [currentUser, setCurrentUser] = React.useState<User | null>(null);
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
-  const activeCocotalk = cocotalks.find(c => c.id === activeCocotalkId);
   
   // Effect 1: Handle auth state changes and redirection
   React.useEffect(() => {
@@ -137,38 +131,10 @@ export default function Home() {
 
   // Effect 3: Set the initial active conversation after data has loaded.
   React.useEffect(() => {
-    if (!isDataLoading && conversations.length > 0 && !activeConversationId && !activeCocotalkId) {
+    if (!isDataLoading && conversations.length > 0 && !activeConversationId) {
         setActiveConversationId(conversations[0].id);
     }
-  }, [isDataLoading, conversations, activeConversationId, activeCocotalkId]);
-
-
-  // Effect 4: Fetch cocotalks when user is authenticated.
-  React.useEffect(() => {
-    if (!currentUser) return;
-    
-    const q = query(
-      collection(db, "users", currentUser.uid, "cocotalks"),
-      orderBy("createdAt", "desc")
-    );
-
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const cocotalksData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      } as StoredCocotalk));
-      setCocotalks(cocotalksData);
-    }, (error) => {
-      console.error("Error fetching cocotalks:", error);
-      toast({
-        variant: "destructive",
-        title: "Loading Error",
-        description: "Could not load custom Cocotalks.",
-      });
-    });
-
-    return () => unsubscribe();
-  }, [currentUser, toast]);
+  }, [isDataLoading, conversations, activeConversationId]);
 
   const handleSendMessage = async (text: string, file: File | null) => {
     if (!currentUser) {
@@ -196,7 +162,6 @@ export default function Home() {
       const aiResult = await invokeAiChat({
           historyWithNewMessage: historyForAI,
           model: model,
-          activeCocotalk: activeCocotalk || null,
       });
 
       if (aiResult.error || !aiResult.response) {
@@ -222,14 +187,13 @@ export default function Home() {
         });
 
       } else {
-        const newTitle = activeCocotalk?.title || messageContent.substring(0, 30).trim() || "Nouvelle Conversation";
+        const newTitle = messageContent.substring(0, 30).trim() || "Nouvelle Conversation";
         
         const newConvRef = await addDoc(collection(db, "users", currentUser.uid, "conversations"), {
             title: newTitle,
             messages: [userMessageForDb, modelMessageForDb],
             userId: currentUser.uid,
             createdAt: serverTimestamp(),
-            ...(activeCocotalk && { cocotalkOriginId: activeCocotalk.id }),
         });
         
         selectConversation(newConvRef.id);
@@ -249,7 +213,6 @@ export default function Home() {
 
   const createNewChat = async () => {
     if (!currentUser) return;
-    setActiveCocotalkId(null);
     setActiveConversationId(null);
   }
   
@@ -289,65 +252,9 @@ export default function Home() {
         toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de supprimer la conversation.' });
     }
   };
-  
-  const handleCreateCocotalk = async (values: CocotalkFormValues) => {
-    if (!currentUser) {
-        toast({
-            variant: 'destructive',
-            title: 'Erreur d\'authentification',
-            description: 'Veuillez patienter ou rafraîchir la page et réessayer.',
-        });
-        return;
-    }
-    try {
-      const docRef = await addDoc(collection(db, "users", currentUser.uid, "cocotalks"), {
-        ...values,
-        createdAt: serverTimestamp(),
-        userId: currentUser.uid,
-      });
-      toast({ title: 'Succès', description: 'Cocotalk créé avec succès.' });
-      selectCocotalk(docRef.id);
-    } catch (error) {
-      console.error("Error creating new cocotalk:", error);
-      toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de créer le Cocotalk.' });
-    }
-  };
-
-  const handleUpdateCocotalk = async (id: string, values: CocotalkFormValues) => {
-    if (!currentUser) return;
-    const cocotalkRef = doc(db, "users", currentUser.uid, "cocotalks", id);
-    try {
-      await updateDoc(cocotalkRef, values as any);
-      toast({ title: 'Succès', description: 'Cocotalk mis à jour avec succès.' });
-    } catch (error) {
-      console.error("Error updating cocotalk:", error);
-      toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de mettre à jour le Cocotalk.' });
-    }
-  };
-
-  const handleDeleteCocotalk = async (id: string) => {
-    if (!currentUser) return;
-    if (activeCocotalkId === id) {
-      selectCocotalk(null);
-    }
-    const cocotalkRef = doc(db, "users", currentUser.uid, "cocotalks", id);
-    try {
-      await deleteDoc(cocotalkRef);
-      toast({ title: 'Succès', description: 'Cocotalk supprimé.' });
-    } catch (error) {
-      console.error("Error deleting cocotalk:", error);
-      toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de supprimer le Cocotalk.' });
-    }
-  };
 
   const selectConversation = (id: string | null) => {
-      setActiveCocotalkId(null);
       setActiveConversationId(id);
-  }
-
-  const selectCocotalk = (id: string | null) => {
-      setActiveConversationId(null);
-      setActiveCocotalkId(id);
   }
 
   // Show skeleton while auth state is being determined or data is loading.
@@ -414,18 +321,6 @@ export default function Home() {
     messages: toDisplayMessages(activeConversation.messages),
   } : null;
 
-  const initialCocotalkMessages: DisplayMessage[] = [];
-  if (activeCocotalk && !activeConversationId) {
-    const greetingText = activeCocotalk.greetingMessage || "Bonjour! Je suis votre nouvel assistant. Comment puis-je vous aider aujourd'hui ?";
-    initialCocotalkMessages.push({
-      id: 'greeting-ui-only',
-      role: 'model',
-      content: <p className="!my-0">{greetingText}</p>,
-      text_content: greetingText
-    });
-  }
-
-
   return (
     <div className="flex flex-col h-screen w-full bg-background overflow-hidden">
       <AppHeader />
@@ -437,12 +332,6 @@ export default function Home() {
           createNewChat={createNewChat}
           onDeleteConversation={handleDeleteConversation}
           onRenameConversation={handleRenameConversation}
-          cocotalks={cocotalks}
-          activeCocotalkId={activeCocotalkId}
-          setActiveCocotalkId={selectCocotalk}
-          createNewCocotalk={handleCreateCocotalk}
-          updateCocotalk={handleUpdateCocotalk}
-          deleteCocotalk={handleDeleteCocotalk}
         />
         <main className="flex flex-1 flex-col">
           {activeDisplayConversation ? (
@@ -452,14 +341,6 @@ export default function Home() {
               onSendMessage={handleSendMessage}
               isLoading={isLoading}
             />
-          ) : activeCocotalk ? (
-            <ChatPanel
-             key={activeCocotalk.id}
-             messages={initialCocotalkMessages}
-             onSendMessage={handleSendMessage}
-             isLoading={isLoading}
-             activeCocotalk={activeCocotalk}
-           />
           ) : (
             <ChatPanel
               key="welcome"
