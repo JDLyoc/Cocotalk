@@ -32,29 +32,6 @@ const MultilingualChatOutputSchema = z.object({
 export type MultilingualChatOutput = z.infer<typeof MultilingualChatOutputSchema>;
 
 
-function createSystemPrompt(persona?: string, rules?: string): string {
-  // Case 1: A Cocotalk is active (custom rules are provided).
-  if (rules) {
-    const fullRules = `${rules}\n\nIMPORTANT: Vous devez TOUJOURS répondre en FRANÇAIS, quelle que soit la langue de l'utilisateur.`;
-    const fullPersona = persona || 'Vous êtes un assistant IA serviable, compétent et amical.';
-
-    return `Vous êtes un assistant conversationnel IA puissant et flexible.
-Votre comportement est défini par la persona et les règles suivantes. Vous DEVEZ les suivre attentivement.
-
-## Persona
-${fullPersona}
-
-## Règles & Scénario
-${fullRules}
-`;
-  }
-
-  // Case 2: Standard chat (no custom rules).
-  // We use a very basic system prompt that only sets the language and a basic persona.
-  return `Vous êtes un assistant IA serviable, compétent et amical. RÉPONDEZ TOUJOURS EN FRANÇAIS, quelle que soit la langue de l'utilisateur.`;
-}
-
-
 export async function multilingualChat(input: MultilingualChatInput): Promise<MultilingualChatOutput> {
   return multilingualChatFlow(input);
 }
@@ -74,27 +51,48 @@ const multilingualChatFlow = ai.defineFlow(
       if (!messages || messages.length === 0) {
         return { error: "INVALID_ARGUMENT: Au moins un message est requis pour démarrer une conversation." };
       }
-
-      const systemPrompt = createSystemPrompt(persona, rules);
       
       const genkitMessages: Message[] = messages.map(msg => ({
           role: msg.role as 'user' | 'model' | 'tool',
           content: [{ text: msg.content }]
       }));
       
-      // The history to be sent to the AI will be reconstructed with the system prompt at the beginning.
-      // This is a common pattern for models that do not support a dedicated 'system' role.
-      const historyWithSystemPrompt: Message[] = [
-        { role: 'user', content: [{ text: systemPrompt }] },
-        { role: 'model', content: [{ text: 'Oui, j\'ai bien compris. Je suivrai ces instructions.' }] },
-        ...genkitMessages
-      ];
+      let historyForAI: Message[];
+      
+      // Determine the system prompt based on whether it's a standard chat or a Cocotalk
+      if (rules) {
+        // Cocotalk: Inject persona and rules as a system message.
+        const fullPersona = persona || 'Vous êtes un assistant IA serviable, compétent et amical.';
+        const systemPrompt = `Vous êtes un assistant conversationnel IA puissant et flexible.
+Votre comportement est défini par la persona et les règles suivantes. Vous DEVEZ les suivre attentivement.
 
-      // Since the entire conversation is now in the history, we pass it all in the 'history' parameter
-      // and remove the 'prompt' and 'system' parameters.
+## Persona
+${fullPersona}
+
+## Règles & Scénario
+${rules}
+
+IMPORTANT: Vous devez TOUJOURS répondre en FRANÇAIS, quelle que soit la langue de l'utilisateur.`;
+
+        historyForAI = [
+          { role: 'user', content: [{ text: systemPrompt }] },
+          { role: 'model', content: [{ text: "Oui, j'ai bien compris. Je suivrai ces instructions." }] },
+          ...genkitMessages
+        ];
+      } else {
+        // Standard Chat: Just add the "always French" instruction to the first user message.
+        const firstUserMessage = genkitMessages[0];
+        const instruction = "RÉPONDEZ TOUJOURS EN FRANÇAIS, quelle que soit la langue de l'utilisateur.\n\n";
+        
+        firstUserMessage.content[0].text = instruction + firstUserMessage.content[0].text;
+        
+        historyForAI = genkitMessages;
+      }
+      
+
       const genkitResponse = await ai.generate({
         model: activeModel,
-        history: historyWithSystemPrompt,
+        history: historyForAI,
         tools: [searchWebTool],
         toolChoice: 'auto',
         config: {
@@ -108,8 +106,7 @@ const multilingualChatFlow = ai.defineFlow(
         const toolOutputs = await Promise.all(toolCalls.map(ai.runTool));
         const finalResponse = await ai.generate({
           model: activeModel,
-          // We use the full history again, now with the tool call and its output added.
-          history: [...historyWithSystemPrompt, genkitResponse.message, ...toolOutputs],
+          history: [...historyForAI, genkitResponse.message, ...toolOutputs],
           tools: [searchWebTool],
         });
         return { response: finalResponse.text };
